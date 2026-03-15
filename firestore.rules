@@ -1,0 +1,182 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+    
+    // Check if user is admin (using custom claims)
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.admin == true;
+    }
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Check if offer data is valid
+    function isValidOffer() {
+      return request.resource.data.keys().hasAll([
+        'bankName', 'merchant', 'discountType', 
+        'discountValue', 'isActive', 'category'
+      ]) &&
+      request.resource.data.bankName is string &&
+      request.resource.data.merchant is string &&
+      request.resource.data.discountValue is number &&
+      request.resource.data.isActive is bool;
+    }
+    
+    // ========================================
+    // OFFERS COLLECTION
+    // ========================================
+    match /offers/{offerId} {
+      // Read rules:
+      // - Anyone can read active offers (for the app)
+      // - Admin can read all offers (including inactive)
+      allow read: if resource.data.isActive == true || isAdmin();
+      
+      // Write rules: Admin only
+      // - Only admin can create offers
+      // - Must have required fields
+      allow create: if isAdmin() && isValidOffer();
+      
+      // Only admin can update offers
+      allow update: if isAdmin();
+      
+      // Only admin can delete offers
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // USERS COLLECTION
+    // ========================================
+    match /users/{userId} {
+      // Users can read and write their own data
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can only update their own preferences
+      // CRITICAL: Prevent users from setting isPremium or admin themselves
+      allow create: if isOwner(userId) && 
+                      !request.resource.data.keys().hasAny(['isPremium', 'admin']);
+      
+      allow update: if isOwner(userId) && 
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium', 'admin']);
+      
+      // Admin can read all users (for analytics)
+      allow read: if isAdmin();
+    }
+    
+    // ========================================
+    // ADMIN COLLECTION
+    // ========================================
+    // For admin-only data like analytics, logs, etc.
+    match /admin/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // CATEGORIES COLLECTION
+    // ========================================
+    match /categories/{categoryId} {
+      // Anyone can read categories
+      allow read: if true;
+      
+      // Only admin can modify categories
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // FEEDBACK COLLECTION
+    // ========================================
+    match /feedback/{feedbackId} {
+      // Users can create feedback about offers
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['offerId', 'userId', 'rating']);
+      
+      // Users can read their own feedback
+      // Admin can read all feedback
+      allow read: if isAdmin() || 
+                     (isAuthenticated() && resource.data.userId == request.auth.uid);
+      
+      // Only admin can update/delete feedback
+      allow update, delete: if isAdmin();
+    }
+    
+    // ========================================
+    // ANALYTICS COLLECTION
+    // ========================================
+    match /analytics/{document=**} {
+      // Only admin can access analytics
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // LOGS COLLECTION
+    // ========================================
+    match /logs/{logId} {
+      // Users can create error logs (for crash reporting)
+      allow create: if isAuthenticated();
+      
+      // Only admin can read logs
+      allow read: if isAdmin();
+      
+      // No one can update/delete logs (append-only)
+      allow update, delete: if false;
+    }
+    
+    // ========================================
+    // MERCHANTS COLLECTION (if you add it)
+    // ========================================
+    match /merchants/{merchantId} {
+      // Anyone can read merchant data
+      allow read: if true;
+      
+      // Only admin can modify merchants
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // BANKS COLLECTION (if you add it)
+    // ========================================
+    match /banks/{bankId} {
+      // Anyone can read bank data
+      allow read: if true;
+      
+      // Only admin can modify banks
+      allow write: if isAdmin();
+    }
+    // ========================================
+    // MERCHANT OPT-OUT COLLECTION
+    // ========================================
+    match /opt_out_merchants/{optOutId} {
+      // Allow creation by anyone (public form) but validate schema
+      allow create: if request.resource.data.keys().hasAll(['merchant', 'contactName', 'email', 'reason']) &&
+                   request.resource.data.merchant is string &&
+                   request.resource.data.email is string &&
+                   request.resource.data.reason is string;
+      
+      // Only admin can read/update/delete
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ========================================
+    // CONFIG COLLECTION
+    // ========================================
+    match /config/{configId} {
+      // Anyone can read config (needed for app/affiliate router)
+      allow read: if true;
+      
+      // Only admin can modify config
+      allow write: if isAdmin();
+    }
+  }
+}

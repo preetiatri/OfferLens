@@ -1,0 +1,298 @@
+package com.offerlens.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.offerlens.data.Offer
+import com.offerlens.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.*
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import com.offerlens.R
+import androidx.compose.foundation.isSystemInDarkTheme
+
+@Composable
+fun NeonOfferCard(
+    offer: Offer,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val offerDateFormatter = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+    
+    val discountText = if (offer.discountType.equals("Percentage", ignoreCase = true)) {
+        val value = if (offer.discountValue % 1.0 == 0.0) {
+            offer.discountValue.toInt().toString()
+        } else {
+            offer.discountValue.toString()
+        }
+        "$value% OFF"
+    } else {
+        val value = if (offer.discountValue % 1.0 == 0.0) {
+            offer.discountValue.toInt().toString()
+        } else {
+            offer.discountValue.toString()
+        }
+        "₹$value OFF"
+    }
+    
+    // Format date
+    val dateText = try {
+        if (offer.endDate != null) {
+            context.getString(R.string.expires_prefix, offerDateFormatter.format(offer.endDate.toDate()))
+        } else {
+            context.getString(R.string.expires_soon)
+        }
+    } catch (e: Exception) {
+        context.getString(R.string.expires_soon)
+    }
+    
+    // Determine color based on discount and theme
+    val isDark = isSystemInDarkTheme()
+    
+    val baseColor = when {
+        offer.discountValue >= 40 -> if (isDark) NeonCyan else CyanTeal
+        offer.discountValue >= 25 -> if (isDark) NeonOrange else OrangeBurnt
+        else -> if (isDark) NeonGreen else GreenEmerald
+    }
+    
+    val neonColor = baseColor // Alias for clarity in existing code
+
+    // Check if offer is "New" (created within last 48 hours)
+    val isNew = remember(offer.createdAt) {
+        val now = System.currentTimeMillis()
+        val createdAt = offer.createdAt?.seconds?.times(1000) ?: 0L
+        createdAt > 0 && (now - createdAt) < (48 * 60 * 60 * 1000)
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(
+                color = if (isDark) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                } else {
+                    Color.White // Solid white for light mode to show shadow/border clearly
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = 1.5.dp, // Thicker border
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        neonColor,
+                        Color.Transparent,
+                        neonColor.copy(alpha = 0.5f)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Merchant Logo (Using Coil or Fallback)
+            Box(
+                modifier = Modifier
+                    .size(128.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                neonColor.copy(alpha = 0.2f),
+                                DarkCardBackground // Use new color
+                            )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = neonColor.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
+                if (offer.merchantUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("https://www.google.com/s2/favicons?domain=${java.net.URI(offer.merchantUrl).host}&sz=128")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                }
+
+                // Overlay Text (always visible if image fails or loading, but hidden if image succeeds?)
+                if (offer.merchantUrl.isEmpty()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = offer.merchant.take(1).uppercase(),
+                            fontSize = 48.sp,
+                            color = neonColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = offer.merchant,
+                            fontSize = 10.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+            // NEW Badge Overlay
+            if (isNew) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                        .background(
+                            color = if (isDark) NeonPinkAccent else PinkStrong, // Use new color
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = context.getString(R.string.new_badge),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+            
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.Top
+            ) {
+                Column {
+                    Text(
+                        text = discountText,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = neonColor
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = offer.description.take(50) + if (offer.description.length > 50) "..." else "",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        maxLines = 2,
+                        lineHeight = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = dateText,
+                        fontSize = 11.sp,
+                        color = Color.Gray.copy(alpha = 0.7f)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                // Copy Code Button
+                val cleanCode = offer.couponCode.trim()
+                val hasCode = cleanCode.isNotEmpty()
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .background(
+                            color = if (hasCode) Color.Transparent else neonColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(18.dp)
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            color = neonColor,
+                            shape = RoundedCornerShape(18.dp)
+                        )
+                        .clickable(enabled = hasCode) {
+                            if (hasCode) {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Coupon Code", cleanCode)
+                                clipboard.setPrimaryClip(clip)
+                                
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.copied_toast, cleanCode),
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.no_code_toast),
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (hasCode) {
+                            Text(
+                                text = cleanCode,
+                                color = neonColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = context.getString(R.string.cd_copy),
+                                tint = neonColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else {
+                            Text(
+                                text = context.getString(R.string.no_code_label),
+                                color = neonColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

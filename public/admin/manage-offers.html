@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OfferLens Elite - Unified Admin Portal</title>
+    <!-- SheetJS for Excel Parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #00F5FF;
+            --secondary: #00D4FF;
+            --accent: #F50057;
+            --bg: #0A0A14;
+            --surface: #1A1A2E;
+            --surface-light: rgba(255, 255, 255, 0.05);
+            --text: #FFFFFF;
+            --text-dim: rgba(255, 255, 255, 0.6);
+            --error: #FF5252;
+            --success: #00FF88;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: radial-gradient(circle at top right, #1A1A2E, #0A0A14);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Login Screen */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .login-card {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .login-card h1 {
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+
+        /* Unified Container */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            display: none; /* Hidden until auth */
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .brand h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px;
+            border-radius: 14px;
+            width: fit-content;
+        }
+
+        .tab-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--surface);
+            color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .tab-btn:hover:not(.active) {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Sections */
+        .section {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 24px;
+        }
+
+        /* Inputs & Buttons */
+        input, select, textarea {
+            background: var(--surface-light);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            width: 100%;
+            margin-bottom: 16px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--bg);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 245, 255, 0.2);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-danger {
+            background: rgba(255, 82, 82, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(255, 82, 82, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 82, 82, 0.2);
+        }
+
+        /* Grid Layout for Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .full-width { grid-column: span 2; }
+
+        /* Offer Items */
+        .offer-item {
+            background: var(--surface-light);
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        .offer-item:hover {
+            border-color: rgba(0, 245, 255, 0.1);
+        }
+
+        .offer-info h4 {
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .offer-info p {
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        .badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            margin-left: 8px;
+            font-weight: 700;
+        }
+
+        .badge-active { background: rgba(0, 255, 136, 0.1); color: var(--success); }
+        .badge-inactive { background: rgba(255, 82, 82, 0.1); color: var(--error); }
+
+        /* Bulk Upload Zone */
+        .drop-zone {
+            border: 2px dashed rgba(0, 245, 255, 0.2);
+            border-radius: 20px;
+            padding: 60px 20px;
+            text-align: center;
+            background: rgba(0, 245, 255, 0.02);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .drop-zone.dragover {
+            background: rgba(0, 245, 255, 0.05);
+            border-color: var(--primary);
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th { text-align: left; color: var(--primary); padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        td { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+
+        /* Switch */
+        .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        #loginMsg { margin-top: 15px; font-size: 13px; color: var(--error); }
+    </style>
+</head>
+
+<body>
+
+    <!-- Login Section -->
+    <div id="loginSection" class="login-overlay">
+        <div class="login-card">
+            <h1>Elite Admin</h1>
+            <p style="color: var(--text-dim); margin-bottom: 30px;">Sign in to manage OfferLens</p>
+            <form id="loginForm">
+                <label>Admin Email</label>
+                <input type="email" id="email" required placeholder="admin@ipreu.co.in">
+                <label>Password</label>
+                <input type="password" id="password" required placeholder="••••••••">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Enter Dashboard</button>
+            </form>
+            <div id="loginMsg"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="appContainer" class="container">
+        <header>
+            <div class="brand">
+                <h1>Elite Portal</h1>
+            </div>
+            <button onclick="firebase.auth().signOut()" class="btn btn-outline">Logout</button>
+        </header>
+
+        <nav class="nav-tabs">
+            <button class="tab-btn active" onclick="switchTab('list')">Manage Offers</button>
+            <button class="tab-btn" onclick="switchTab('manual')">Add Manual</button>
+            <button class="tab-btn" onclick="switchTab('bulk')">Bulk Upload</button>
+            <button class="tab-btn" onclick="switchTab('affiliate')">Affiliation</button>
+        </nav>
+
+        <!-- View: Offer List -->
+        <div id="tab-list" class="section active">
+            <div class="card">
+                <input type="text" id="searchInput" placeholder="Search by merchant, bank, or category..." onkeyup="filterOffers()">
+                <div id="offersList">
+                    <p style="text-align: center; color: var(--text-dim);">Loading offers...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Manual Add -->
+        <div id="tab-manual" class="section">
+            <div class="card">
+                <h2 style="margin-bottom: 24px;">New Manual Offer</h2>
+                <form id="manualOfferForm">
+                    <div class="form-grid">
+                        <div>
+                            <label>Merchant</label>
+                            <input type="text" id="m_merchant" required placeholder="e.g. Amazon">
+                        </div>
+                        <div>
+                            <label>Bank Name</label>
+                            <input type="text" id="m_bankName" required placeholder="e.g. HDFC">
+                        </div>
+                        <div>
+                            <label>Category</label>
+                            <select id="m_category" required>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Dining">Dining</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Travel">Travel</option>
+                                <option value="Groceries">Groceries</option>
+                                <option value="Beauty">Beauty</option>
+                                <option value="Health">Health</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Payment Type</label>
+                            <input type="text" id="m_paymentType" placeholder="Credit Card, UPI, etc." required>
+                        </div>
+                        <div>
+                            <label>Discount Type</label>
+                            <select id="m_discountType" required>
+                                <option value="Percentage">Percentage</option>
+                                <option value="Flat">Flat ₹</option>
+                                <option value="Cashback">Cashback</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Discount Value</label>
+                            <input type="number" id="m_discountValue" required>
+                        </div>
+                        <div>
+                            <label>Min Order (₹)</label>
+                            <input type="number" id="m_minOrder" value="0">
+                        </div>
+                        <div>
+                            <label>Valid Until</label>
+                            <input type="date" id="m_endDate">
+                        </div>
+                        <div class="full-width">
+                            <label>Description</label>
+                            <input type="text" id="m_description" required placeholder="Short catchphrase for the offer">
+                        </div>
+                        <div class="full-width">
+                            <label>Terms & Conditions</label>
+                            <textarea id="m_tnc" rows="4"></textarea>
+                        </div>
+                        <div>
+                            <label>Coupon Code</label>
+                            <input type="text" id="m_coupon">
+                        </div>
+                        <div>
+                            <label>Source URL</label>
+                            <input type="url" id="m_url">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="m_submitBtn" style="width: 100%; margin-top: 10px;">Save to Firebase</button>
+                </form>
+                <div id="m_status" style="margin-top: 20px; text-align: center;"></div>
+            </div>
+        </div>
+
+        <!-- View: Bulk Upload -->
+        <div id="tab-bulk" class="section">
+            <div class="card">
+                <h2 style="margin-bottom: 12px;">Excel Bulk Importer</h2>
+                <p style="color: var(--text-dim); margin-bottom: 24px;">Drag and drop your Excel file to sync multiple offers instantly.</p>
+                <div id="dropZone" class="drop-zone">
+                    <p style="font-size: 16px;">Drop .xlsx here or click to browse</p>
+                    <input type="file" id="bulkInput" accept=".xlsx, .xls, .csv" style="display: none;">
+                    <p id="bulkFileName" style="margin-top: 15px; color: var(--primary); font-weight: 700;"></p>
+                </div>
+                
+                <div id="bulkPreview" style="display:none; margin-top: 30px;">
+                    <h3>Data Preview (<span id="bulkCount">0</span> rows)</h3>
+                    <div style="overflow-x: auto; margin: 15px 0;">
+                        <table id="bulkTable">
+                            <thead>
+                                <tr><th>Merchant</th><th>Bank</th><th>Category</th><th>Value</th><th>Expiry</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <button id="bulkUploadBtn" class="btn btn-primary" style="width: 100%;">Sync to Firestore</button>
+                </div>
+                <div id="bulkStatus" style="margin-top: 20px; text-align: center;"></div>
+            </div>
+        </div>
+
+        <!-- View: Affiliation -->
+        <div id="tab-affiliate" class="section">
+            <div class="card" style="border-left: 4px solid var(--accent);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                    <h2>Server Affiliate Routing</h2>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <label class="switch">
+                            <input type="checkbox" id="affGlobalToggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span id="affGlobalText" style="font-weight: 700; font-size: 12px;">DISABLED</span>
+                    </div>
+                </div>
+                <p style="color: var(--text-dim); margin-bottom: 25px;">Redirect offer links through affiliate providers based on priority.</p>
+                
+                <table>
+                    <thead>
+                        <tr><th>Provider</th><th>Priority (High = Primary)</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="affProvidersList"></tbody>
+                </table>
+                <div style="margin-top: 30px; text-align: right;">
+                    <button class="btn btn-primary" onclick="saveAffiliateConfig()">Sync Configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDsYzRXx7iFG-Ezd3Au5-VZbcA1PkhHZHU",
+            authDomain: "offerlens.firebaseapp.com",
+            projectId: "offerlens",
+            storageBucket: "offerlens.firebasestorage.app",
+            messagingSenderId: "702877897804",
+            appId: "1:702877897804:web:3e62dbfe9237f6a67390e9"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let allOffers = [];
+        let parsedBulkData = [];
+
+        // Auth Logic
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'block';
+                loadOffers();
+                loadAffiliateConfig();
+            } else {
+                document.getElementById('loginSection').style.display = 'flex';
+                document.getElementById('appContainer').style.display = 'none';
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            btn.textContent = 'Authenticating...';
+            auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value)
+                .catch(err => {
+                    document.getElementById('loginMsg').textContent = err.message;
+                    btn.textContent = 'Enter Dashboard';
+                });
+        });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabId).classList.add('active');
+        }
+
+        // --- MANAGE LIST ---
+        function loadOffers() {
+            db.collection('offers').orderBy('createdAt', 'desc').limit(100).onSnapshot(snap => {
+                allOffers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderOffers(allOffers);
+            });
+        }
+
+        function renderOffers(offers) {
+            const list = document.getElementById('offersList');
+            if (offers.length === 0) { list.innerHTML = '<p style="text-align:center;">No offers found.</p>'; return; }
+            
+            list.innerHTML = offers.map(o => {
+                const active = o.isActive !== false;
+                return `
+                    <div class="offer-item" style="opacity: ${active ? 1 : 0.6}">
+                        <div class="offer-info">
+                            <h4>${o.merchant} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span></h4>
+                            <p>${o.bankName} • ${o.description}</p>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            ${active ? `<button class="btn btn-outline" onclick="toggleOffer('${o.id}', false)">Deactivate</button>` : `<button class="btn btn-primary" onclick="toggleOffer('${o.id}', true)">Activate</button>`}
+                            <button class="btn btn-danger" onclick="deleteOffer('${o.id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterOffers() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            renderOffers(allOffers.filter(o => 
+                o.merchant?.toLowerCase().includes(q) || 
+                o.bankName?.toLowerCase().includes(q) || 
+                o.category?.toLowerCase().includes(q)
+            ));
+        }
+
+        function toggleOffer(id, status) {
+            db.collection('offers').doc(id).update({ isActive: status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+
+        function deleteOffer(id) {
+            if (confirm('Permanently delete this offer?')) db.collection('offers').doc(id).delete();
+        }
+
+        // --- MANUAL ADD ---
+        document.getElementById('manualOfferForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('m_submitBtn');
+            const status = document.getElementById('m_status');
+            btn.disabled = true; btn.textContent = 'Storing...';
+
+            const data = {
+                merchant: document.getElementById('m_merchant').value,
+                bankName: document.getElementById('m_bankName').value,
+                category: document.getElementById('m_category').value,
+                paymentType: document.getElementById('m_paymentType').value,
+                discountType: document.getElementById('m_discountType').value,
+                discountValue: parseFloat(document.getElementById('m_discountValue').value),
+                minOrderValue: parseFloat(document.getElementById('m_minOrder').value),
+                description: document.getElementById('m_description').value,
+                termsAndConditions: document.getElementById('m_tnc').value,
+                couponCode: document.getElementById('m_coupon').value,
+                merchantUrl: document.getElementById('m_url').value,
+                isActive: true,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                endDate: document.getElementById('m_endDate').value ? firebase.firestore.Timestamp.fromDate(new Date(document.getElementById('m_endDate').value)) : null
+            };
+
+            try {
+                await db.collection('offers').add(data);
+                status.innerHTML = '<span style="color:var(--success)">✅ Successfully Synchronized!</span>';
+                e.target.reset();
+            } catch (err) {
+                status.innerHTML = '<span style="color:var(--error)">❌ Error: ' + err.message + '</span>';
+            } finally {
+                btn.disabled = false; btn.textContent = 'Save to Firebase';
+            }
+        });
+
+        // --- BULK UPLOAD ---
+        const dropZone = document.getElementById('dropZone');
+        dropZone.onclick = () => document.getElementById('bulkInput').click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+        dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleBulkFile(e.dataTransfer.files[0]); };
+        document.getElementById('bulkInput').onchange = (e) => handleBulkFile(e.target.files[0]);
+
+        function handleBulkFile(file) {
+            if (!file) return;
+            document.getElementById('bulkFileName').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                processBulkData(json);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processBulkData(data) {
+            parsedBulkData = data.map(item => {
+                let endDate = null;
+                if (item['Valid Until']) {
+                    const dateVal = item['Valid Until'];
+                    if (typeof dateVal === 'number') {
+                        // Excel serial date - more robust parsing
+                        const parsed = XLSX.SSF.parse_date_code(dateVal);
+                        endDate = new Date(parsed.y, parsed.m - 1, parsed.d);
+                    } else {
+                        endDate = new Date(dateVal);
+                    }
+                }
+                let dtype = item['Discount Type'] || 'Percentage';
+                if (dtype === 'Fixed') dtype = 'Flat';
+
+                return {
+                    merchant: item['Merchant'] || '',
+                    bankName: item['Bank Name'] || '',
+                    category: item['Category'] || 'Shopping',
+                    paymentType: item['Payment Type'] || 'Credit Card',
+                    discountType: dtype,
+                    discountValue: parseFloat(item['Discount Value']) || 0,
+                    minOrderValue: parseFloat(item['Min Order']) || 0,
+                    description: item['Description'] || '',
+                    termsAndConditions: item['Terms & C'] || '',
+                    couponCode: item['Coupon Code'] || '',
+                    sourceUrl: item['Offer Source'] || '',
+                    isActive: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    endDate: endDate ? firebase.firestore.Timestamp.fromDate(endDate) : null
+                };
+            }).filter(i => i.merchant && i.bankName);
+
+            document.getElementById('bulkCount').textContent = parsedBulkData.length;
+            const tbody = document.querySelector('#bulkTable tbody');
+            tbody.innerHTML = parsedBulkData.slice(0, 5).map(i => `<tr><td>${i.merchant}</td><td>${i.bankName}</td><td>${i.category}</td><td>${i.discountValue}</td><td>${i.endDate ? i.endDate.toDate().toLocaleDateString() : 'N/A'}</td></tr>`).join('');
+            document.getElementById('bulkPreview').style.display = 'block';
+        }
+
+        document.getElementById('bulkUploadBtn').onclick = async () => {
+            const btn = document.getElementById('bulkUploadBtn');
+            const status = document.getElementById('bulkStatus');
+            btn.disabled = true; btn.textContent = 'Syncing...';
+            
+            try {
+                const batch = db.batch();
+                parsedBulkData.forEach(item => {
+                    const ref = db.collection('offers').doc();
+                    batch.set(ref, { ...item, id: ref.id });
+                });
+                await batch.commit();
+                status.innerHTML = `<span style="color:var(--success)">✅ Successfully synced ${parsedBulkData.length} offers!</span>`;
+                document.getElementById('bulkPreview').style.display = 'none';
+            } catch (err) {
+                status.innerHTML = `<span style="color:var(--error)">❌ Migration Failed: ${err.message}</span>`;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Sync to Firestore';
+            }
+        };
+
+        // --- AFFILIATION ---
+        let affConfig = { enabled: false, providers: { cuelinks: { enabled: false, priority: 10 }, vcommission: { enabled: false, priority: 5 }, amazon: { enabled: false, priority: 1 } } };
+
+        function loadAffiliateConfig() {
+            db.collection('config').doc('affiliates').get().then(doc => {
+                if (doc.exists) affConfig = doc.data();
+                renderAffUI();
+            });
+        }
+
+        function renderAffUI() {
+            document.getElementById('affGlobalToggle').checked = affConfig.enabled;
+            const text = document.getElementById('affGlobalText');
+            text.textContent = affConfig.enabled ? "ENABLED" : "DISABLED";
+            text.style.color = affConfig.enabled ? "var(--accent)" : "var(--text-dim)";
+
+            const list = document.getElementById('affProvidersList');
+            list.innerHTML = Object.keys(affConfig.providers).map(p => {
+                const c = affConfig.providers[p];
+                return `
+                    <tr>
+                        <td style="text-transform: capitalize;">${p}</td>
+                        <td><input type="number" id="prio_${p}" value="${c.priority}" style="width: 80px; margin: 0;"></td>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox" id="en_${p}" ${c.enabled ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function saveAffiliateConfig() {
+            const conf = {
+                enabled: document.getElementById('affGlobalToggle').checked,
+                providers: {},
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            ['cuelinks', 'vcommission', 'amazon'].forEach(p => {
+                conf.providers[p] = {
+                    enabled: document.getElementById('en_' + p).checked,
+                    priority: parseInt(document.getElementById('prio_' + p).value)
+                };
+            });
+            await db.collection('config').doc('affiliates').set(conf);
+            alert('Cloud Configuration Updated!');
+            loadAffiliateConfig();
+        }
+    </script>
+</body>
+
+</html>

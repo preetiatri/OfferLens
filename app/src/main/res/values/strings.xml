@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">OfferLens</string>
+    
+    <!-- Home Screen -->
+    <string name="user_profile_title">User Profile</string>
+    <string name="smart_wallet_filter">Smart Wallet Filter</string>
+    <string name="search_hint">Search Offers (swipes to change category)</string>
+    <string name="no_results">No results found</string>
+    <string name="no_offers_yet">No offers yet</string>
+    <string name="search_suggestion">Try searching for something else in \'%1$s\'</string>
+    <string name="check_back_later">Check back later for %1$s offers</string>
+    <string name="expires_prefix">Expires %1$s</string>
+    <string name="expires_soon">Expires Soon</string>
+    <string name="new_badge">NEW</string>
+    <string name="copied_toast">✓ Copied: %1$s</string>
+    <string name="no_code_toast">No coupon code available</string>
+    <string name="no_code_label">No Code</string>
+    <string name="copy_id_button">Copy ID</string>
+    <string name="close_button">Close</string>
+    <string name="user_id_label">User ID (Support):</string>
+    <string name="tap_to_copy_hint">(Tap ID to copy)</string>
+    
+    <!-- Content Descriptions -->
+    <string name="cd_user_profile">User Profile</string>
+    <string name="cd_premium">Premium</string>
+    <string name="cd_refresh">Refresh</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_clear">Clear</string>
+    <string name="cd_copy">Copy</string>
+</resources>
