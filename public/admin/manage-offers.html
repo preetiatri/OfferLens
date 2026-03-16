@@ -150,19 +150,49 @@
         input, select, textarea {
             background: var(--surface-light);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
+            color: #ffffff;
             padding: 12px 16px;
             border-radius: 12px;
             width: 100%;
             margin-bottom: 16px;
             font-size: 15px;
             transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2300ff88' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 40px;
+            cursor: pointer;
+        }
+
+        /* Force dark background on native dropdown options */
+        select option {
+            background-color: #1a1a2e;
+            color: #ffffff;
+            padding: 10px;
+        }
+
+        select option:hover,
+        select option:focus,
+        select option:checked {
+            background-color: #00ff88;
+            color: #0A0A14;
         }
 
         input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--primary);
         }
+
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
 
         label {
             display: block;
@@ -478,7 +508,7 @@
 
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyDsYzRXx7iFG-Ezd3Au5-VZbcA1PkhHZHU",
+            apiKey: "AIzaSyB4zSQknYBomEzYWv29rvoasRJG5QV0VZ8",
             authDomain: "offerlens.firebaseapp.com",
             projectId: "offerlens",
             storageBucket: "offerlens.firebasestorage.app",
@@ -535,19 +565,23 @@
 
         function renderOffers(offers) {
             const list = document.getElementById('offersList');
-            if (offers.length === 0) { list.innerHTML = '<p style="text-align:center;">No offers found.</p>'; return; }
+            if (offers.length === 0) { list.innerHTML = '<p style="text-align:center; color: var(--text-dim);">No offers found.</p>'; return; }
             
             list.innerHTML = offers.map(o => {
                 const active = o.isActive !== false;
+                const safeId = o.id.replace(/'/g, "\\'");
                 return `
-                    <div class="offer-item" style="opacity: ${active ? 1 : 0.6}">
+                    <div class="offer-item" id="offer-${o.id}" style="opacity: ${active ? 1 : 0.6}">
                         <div class="offer-info">
                             <h4>${o.merchant} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span></h4>
-                            <p>${o.bankName} • ${o.description}</p>
+                            <p>${o.bankName || ''} • ${o.description || ''}</p>
                         </div>
-                        <div style="display:flex; gap:10px;">
-                            ${active ? `<button class="btn btn-outline" onclick="toggleOffer('${o.id}', false)">Deactivate</button>` : `<button class="btn btn-primary" onclick="toggleOffer('${o.id}', true)">Activate</button>`}
-                            <button class="btn btn-danger" onclick="deleteOffer('${o.id}')">Delete</button>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            ${active 
+                                ? `<button class="btn btn-outline" onclick="window.toggleOffer('${safeId}', false, this)">Deactivate</button>` 
+                                : `<button class="btn btn-primary" onclick="window.toggleOffer('${safeId}', true, this)">Activate</button>`
+                            }
+                            <button class="btn btn-danger" onclick="window.deleteOffer('${safeId}', this)">Delete</button>
                         </div>
                     </div>
                 `;
@@ -557,19 +591,60 @@
         function filterOffers() {
             const q = document.getElementById('searchInput').value.toLowerCase();
             renderOffers(allOffers.filter(o => 
-                o.merchant?.toLowerCase().includes(q) || 
-                o.bankName?.toLowerCase().includes(q) || 
-                o.category?.toLowerCase().includes(q)
+                (o.merchant || '').toLowerCase().includes(q) || 
+                (o.bankName || '').toLowerCase().includes(q) || 
+                (o.category || '').toLowerCase().includes(q)
             ));
         }
 
-        function toggleOffer(id, status) {
-            db.collection('offers').doc(id).update({ isActive: status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        function showToast(msg, isError = false) {
+            let toast = document.getElementById('toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                toast.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:14px 20px;border-radius:12px;font-weight:600;font-size:14px;z-index:9999;transition:opacity 0.4s;';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = msg;
+            toast.style.background = isError ? 'rgba(255,82,82,0.9)' : 'rgba(0,255,136,0.9)';
+            toast.style.color = '#0A0A14';
+            toast.style.opacity = '1';
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
         }
 
-        function deleteOffer(id) {
-            if (confirm('Permanently delete this offer?')) db.collection('offers').doc(id).delete();
-        }
+        window.toggleOffer = async function(id, status, btn) {
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                await db.collection('offers').doc(id).update({ 
+                    isActive: status, 
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+                });
+                showToast(status ? '✅ Offer activated!' : '✅ Offer deactivated!');
+            } catch (err) {
+                console.error('Toggle error:', err);
+                showToast('❌ Error: ' + err.message, true);
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        };
+
+        window.deleteOffer = async function(id, btn) {
+            if (!confirm('⚠️ Permanently delete this offer? This cannot be undone.')) return;
+            const row = document.getElementById('offer-' + id);
+            if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+            try {
+                await db.collection('offers').doc(id).delete();
+                if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+                showToast('🗑️ Offer permanently deleted!');
+            } catch (err) {
+                console.error('Delete error:', err);
+                showToast('❌ Delete failed: ' + err.message, true);
+                if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+            }
+        };
 
         // --- MANUAL ADD ---
         document.getElementById('manualOfferForm').addEventListener('submit', async (e) => {
