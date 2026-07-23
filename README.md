@@ -3,7 +3,7 @@
 OfferLens is a smart Android application that helps users discover and manage offers on their credit cards, debit cards, UPI apps, and digital wallets.
 
 ## Features
-- **Smart Offer Discovery**: Automatically fetches and parses offers using Vertex AI.
+- **Curated Offer Discovery**: Offers are reviewed and entered by our team via the admin portal.
 - **Personalized Dashboard**: Shows offers relevant to your specific cards and wallets.
 - **Premium UI**: Modern fintech aesthetic with glassmorphism and neon accents.
 - **Offline Support**: Caches offers for offline access.
@@ -40,4 +40,3 @@ OfferLens is a smart Android application that helps users discover and manage of
 - **Hilt**: Dependency Injection.
 - **Firestore**: Real-time database.
 - **Cloud Functions**: Backend logic and scheduling.
-- **Vertex AI**: Intelligent offer parsing.

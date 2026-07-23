@@ -134,7 +134,6 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
     // implementation(libs.play.services.auth) // Causing Hilt build errors
-    // implementation(libs.firebase.vertexai) // Check if available in BOM or add specific version if needed
 
     // Freemium (Billing & Ads)
     implementation(libs.billing.ktx)

@@ -1,8 +1,7 @@
 # SECURITY AUDIT: OfferLens Project
 
 **Date:** 2025-12-19
-**Auditor:** Antigravity (Deepmind Agent)
-**Status:** ⚠️ AT RISK - Remediation Required
+**Status:** ⚠️ AT RISK - Remediation Required (historical - see root-level status corrections added to LEGAL_COMPLIANCE.md, COMPLIANCE_VERIFICATION.md, and LEGAL_RELIABILITY_SUMMARY.md for what's actually been remediated since)
 
 ════════════════════════════════════
 1️⃣ FILE-BY-FILE RISK REPORT

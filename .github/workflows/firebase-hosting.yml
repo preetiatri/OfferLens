@@ -1,9 +1,10 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (manual/legacy)
 
+# Disabled from auto-deploying on push: the public/ site (admin panel, privacy,
+# terms, opt-out) now lives on the Hostinger VPS at offerlens.asadigital.co.in.
+# Kept as a manually-triggerable fallback rather than deleted outright.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 # Allow one concurrent deployment
 concurrency:

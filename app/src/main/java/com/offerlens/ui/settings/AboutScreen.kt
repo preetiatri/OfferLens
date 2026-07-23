@@ -264,7 +264,7 @@ fun AboutScreen(
                         color = if (isSystemInDarkTheme()) NeonCyan else CyanTeal,
                         modifier = Modifier
                             .  clickable {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://ipreu.co.in/privacy/offerlens.html"))
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://offerlens.asadigital.co.in/privacy/offerlens.html"))
                                 context.startActivity(intent)
                             },
                         style = androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)

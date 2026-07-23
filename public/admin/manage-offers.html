@@ -337,7 +337,7 @@
             <p style="color: var(--text-dim); margin-bottom: 30px;">Sign in to manage OfferLens</p>
             <form id="loginForm">
                 <label>Admin Email</label>
-                <input type="email" id="email" required placeholder="admin@ipreu.co.in">
+                <input type="email" id="email" required placeholder="admin@asadigital.co.in">
                 <label>Password</label>
                 <input type="password" id="password" required placeholder="••••••••">
                 <button type="submit" class="btn btn-primary" style="width: 100%;">Enter Dashboard</button>
@@ -352,7 +352,7 @@
             <div class="brand">
                 <h1>Elite Portal</h1>
             </div>
-            <button onclick="firebase.auth().signOut()" class="btn btn-outline">Logout</button>
+            <button onclick="window.doSignOut()" class="btn btn-outline">Logout</button>
         </header>
 
         <nav class="nav-tabs">
@@ -365,10 +365,14 @@
         <!-- View: Offer List -->
         <div id="tab-list" class="section active">
             <div class="card">
-                <input type="text" id="searchInput" placeholder="Search by merchant, bank, or category..." onkeyup="filterOffers()">
+                <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+                    <input type="text" id="searchInput" placeholder="Search by merchant, bank, or category..." onkeyup="filterOffers()" style="margin-bottom:0;">
+                    <button class="btn btn-outline" onclick="window.loadOffers()" style="white-space:nowrap;">Refresh</button>
+                </div>
                 <div id="offersList">
                     <p style="text-align: center; color: var(--text-dim);">Loading offers...</p>
                 </div>
+                <button id="loadMoreBtn" class="btn btn-outline" style="width:100%; margin-top:16px; display:none;" onclick="window.loadMoreOffers()">Load More</button>
             </div>
         </div>
 
@@ -384,19 +388,28 @@
                         </div>
                         <div>
                             <label>Bank Name</label>
-                            <input type="text" id="m_bankName" required placeholder="e.g. HDFC">
+                            <select id="m_bankName_select" required onchange="document.getElementById('m_bankName_other').style.display = (this.value === '__other__') ? 'block' : 'none';">
+                                <option value="" disabled selected>Select a bank...</option>
+                            </select>
+                            <input type="text" id="m_bankName_other" placeholder="Custom bank/wallet name (e.g. PhonePe, Paytm)" style="display:none; margin-top:8px;">
+                            <small style="color: var(--text-dim); display:block; margin-top:4px;">
+                                Pick from the list so Smart Wallet card-matching works reliably. Use "Other" only for
+                                UPI/wallet offers or banks outside this list.
+                            </small>
                         </div>
                         <div>
                             <label>Category</label>
+                            <!-- Must stay in sync with the category tabs in the Android app
+                                 (NeoGlassmorphicHomeScreen.kt / OfferListScreen.kt) - an offer
+                                 tagged outside this exact list won't appear under any tab. -->
                             <select id="m_category" required>
                                 <option value="Shopping">Shopping</option>
                                 <option value="Dining">Dining</option>
-                                <option value="Electronics">Electronics</option>
                                 <option value="Travel">Travel</option>
+                                <option value="Entertainment">Entertainment</option>
                                 <option value="Groceries">Groceries</option>
-                                <option value="Beauty">Beauty</option>
-                                <option value="Health">Health</option>
-                                <option value="Other">Other</option>
+                                <option value="Bill Pay & Recharges">Bill Pay & Recharges</option>
+                                <option value="Wallet/UPI Offers">Wallet/UPI Offers</option>
                             </select>
                         </div>
                         <div>
@@ -459,6 +472,7 @@
                 
                 <div id="bulkPreview" style="display:none; margin-top: 30px;">
                     <h3>Data Preview (<span id="bulkCount">0</span> rows)</h3>
+                    <div id="bulkBankWarning" style="display:none; margin: 10px 0; padding: 10px 14px; border-radius: 8px; background: rgba(255,193,7,0.15); color: #FFC107; font-size: 13px;"></div>
                     <div style="overflow-x: auto; margin: 15px 0;">
                         <table id="bulkTable">
                             <thead>
@@ -501,12 +515,17 @@
         </div>
     </div>
 
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase (modular SDK - smaller, tree-shaken bundle vs. the old *-compat.js scripts) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import {
+            getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import {
+            getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDoc, setDoc,
+            query, orderBy, limit, startAfter, getDocs, writeBatch, serverTimestamp, Timestamp
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDw_Q6b-J_e34YPI_YopssrlROU1lKPMok",
             authDomain: "offerlens.firebaseapp.com",
@@ -515,15 +534,38 @@
             messagingSenderId: "702877897804",
             appId: "1:702877897804:web:3e62dbfe9237f6a67390e9"
         };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const auth = firebase.auth();
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
         let allOffers = [];
         let parsedBulkData = [];
 
+        // Must stay in sync with SmartWalletRepository.supportedBanks in the Android app
+        // (app/src/main/java/com/offerlens/data/SmartWalletRepository.kt) - this is the
+        // exact set of names Smart Wallet card-matching recognizes for premium users.
+        const SUPPORTED_BANKS = [
+            "HDFC Bank", "SBI Card", "ICICI Bank", "Axis Bank", "Kotak Mahindra",
+            "Citibank", "American Express", "Standard Chartered", "RBL Bank",
+            "IndusInd Bank", "OneCard", "Amazon Pay"
+        ];
+
+        (function populateBankDropdown() {
+            const select = document.getElementById('m_bankName_select');
+            SUPPORTED_BANKS.forEach(bank => {
+                const opt = document.createElement('option');
+                opt.value = bank;
+                opt.textContent = bank;
+                select.appendChild(opt);
+            });
+            const otherOpt = document.createElement('option');
+            otherOpt.value = '__other__';
+            otherOpt.textContent = 'Other (UPI/wallet/bank not listed)';
+            select.appendChild(otherOpt);
+        })();
+
         // Auth Logic
-        auth.onAuthStateChanged(user => {
+        onAuthStateChanged(auth, user => {
             if (user) {
                 document.getElementById('loginSection').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
@@ -532,7 +574,6 @@
             } else {
                 document.getElementById('loginSection').style.display = 'flex';
                 document.getElementById('appContainer').style.display = 'none';
-                if (offersUnsubscribe) { offersUnsubscribe(); offersUnsubscribe = null; }
             }
         });
 
@@ -540,21 +581,26 @@
             e.preventDefault();
             const btn = e.target.querySelector('button');
             btn.textContent = 'Authenticating...';
-            auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value)
+            signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
                 .catch(err => {
                     document.getElementById('loginMsg').textContent = err.message;
                     btn.textContent = 'Enter Dashboard';
                 });
         });
 
+        // Exposed on window: a <script type="module"> is scoped to the module, not the
+        // global object, so any function referenced from an inline onclick="..." HTML
+        // attribute must be explicitly attached to window or the handler fails silently.
+        window.doSignOut = () => signOut(auth);
+
         // Tab Switching
-        function switchTab(tabId, evt) {
+        window.switchTab = function(tabId, evt) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
 
             (evt || window.event).target.classList.add('active');
             document.getElementById('tab-' + tabId).classList.add('active');
-        }
+        };
 
         // Escapes untrusted text before it's interpolated into innerHTML, to prevent
         // stored XSS from offer/bulk-upload data (merchant name, description, etc.)
@@ -564,22 +610,44 @@
             return div.innerHTML;
         }
 
-        // --- MANAGE LIST ---
-        let offersUnsubscribe = null;
-        function loadOffers() {
-            // Avoid stacking a new live listener on top of an old one if loadOffers()
-            // is called again (e.g. sign-out then sign-in in the same page session).
-            if (offersUnsubscribe) { offersUnsubscribe(); offersUnsubscribe = null; }
-            offersUnsubscribe = db.collection('offers').orderBy('createdAt', 'desc').limit(100).onSnapshot(snap => {
-                allOffers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // --- MANAGE LIST (paginated - Firestore reads happen on demand, not as a
+        // standing real-time listener, and "Load More" reaches offers past the first page) ---
+        const PAGE_SIZE = 50;
+        let lastVisibleDoc = null;
+        let hasMoreOffers = true;
+
+        window.loadOffers = function loadOffers(appendNextPage = false) {
+            if (!appendNextPage) {
+                allOffers = [];
+                lastVisibleDoc = null;
+                hasMoreOffers = true;
+                document.getElementById('offersList').innerHTML = '<p style="text-align:center; color: var(--text-dim);">Loading offers...</p>';
+            }
+            const constraints = [orderBy('createdAt', 'desc')];
+            if (appendNextPage && lastVisibleDoc) constraints.push(startAfter(lastVisibleDoc));
+            constraints.push(limit(PAGE_SIZE));
+
+            getDocs(query(collection(db, 'offers'), ...constraints)).then(snap => {
+                hasMoreOffers = snap.docs.length === PAGE_SIZE;
+                if (snap.docs.length > 0) lastVisibleDoc = snap.docs[snap.docs.length - 1];
+                const pageOffers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                allOffers = appendNextPage ? allOffers.concat(pageOffers) : pageOffers;
                 renderOffers(allOffers);
+                document.getElementById('loadMoreBtn').style.display = hasMoreOffers ? 'block' : 'none';
+            }).catch(err => {
+                document.getElementById('offersList').innerHTML = `<p style="text-align:center; color: var(--error);">Failed to load offers: ${escapeHtml(err.message)}</p>`;
             });
-        }
+        };
+
+        window.loadMoreOffers = function() {
+            if (!hasMoreOffers) return;
+            loadOffers(true);
+        };
 
         function renderOffers(offers) {
             const list = document.getElementById('offersList');
             if (offers.length === 0) { list.innerHTML = '<p style="text-align:center; color: var(--text-dim);">No offers found.</p>'; return; }
-            
+
             list.innerHTML = offers.map(o => {
                 const active = o.isActive !== false;
                 const safeId = o.id.replace(/'/g, "\\'");
@@ -590,8 +658,8 @@
                             <p>${escapeHtml(o.bankName || '')} • ${escapeHtml(o.description || '')}</p>
                         </div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            ${active 
-                                ? `<button class="btn btn-outline" onclick="window.toggleOffer('${safeId}', false, this)">Deactivate</button>` 
+                            ${active
+                                ? `<button class="btn btn-outline" onclick="window.toggleOffer('${safeId}', false, this)">Deactivate</button>`
                                 : `<button class="btn btn-primary" onclick="window.toggleOffer('${safeId}', true, this)">Activate</button>`
                             }
                             <button class="btn btn-danger" onclick="window.deleteOffer('${safeId}', this)">Delete</button>
@@ -601,14 +669,16 @@
             }).join('');
         }
 
-        function filterOffers() {
+        // Note: search only filters the offers currently loaded (this page + any pages
+        // pulled in via "Load More"), not your full Firestore catalog.
+        window.filterOffers = function() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            renderOffers(allOffers.filter(o => 
-                (o.merchant || '').toLowerCase().includes(q) || 
-                (o.bankName || '').toLowerCase().includes(q) || 
+            renderOffers(allOffers.filter(o =>
+                (o.merchant || '').toLowerCase().includes(q) ||
+                (o.bankName || '').toLowerCase().includes(q) ||
                 (o.category || '').toLowerCase().includes(q)
             ));
-        }
+        };
 
         function showToast(msg, isError = false) {
             let toast = document.getElementById('toast');
@@ -631,9 +701,9 @@
             btn.disabled = true;
             btn.textContent = '...';
             try {
-                await db.collection('offers').doc(id).update({ 
-                    isActive: status, 
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+                await updateDoc(doc(db, 'offers', id), {
+                    isActive: status,
+                    updatedAt: serverTimestamp()
                 });
                 showToast(status ? '✅ Offer activated!' : '✅ Offer deactivated!');
             } catch (err) {
@@ -649,7 +719,7 @@
             const row = document.getElementById('offer-' + id);
             if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
             try {
-                await db.collection('offers').doc(id).delete();
+                await deleteDoc(doc(db, 'offers', id));
                 if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
                 showToast('🗑️ Offer permanently deleted!');
             } catch (err) {
@@ -666,9 +736,20 @@
             const status = document.getElementById('m_status');
             btn.disabled = true; btn.textContent = 'Storing...';
 
+            const bankSelectValue = document.getElementById('m_bankName_select').value;
+            const bankName = bankSelectValue === '__other__'
+                ? document.getElementById('m_bankName_other').value.trim()
+                : bankSelectValue;
+
+            if (!bankName) {
+                status.innerHTML = '<span style="color:var(--error)">❌ Please select a bank or enter a custom name.</span>';
+                btn.disabled = false; btn.textContent = 'Save to Firebase';
+                return;
+            }
+
             const data = {
                 merchant: document.getElementById('m_merchant').value,
-                bankName: document.getElementById('m_bankName').value,
+                bankName: bankName,
                 category: document.getElementById('m_category').value,
                 paymentType: document.getElementById('m_paymentType').value,
                 discountType: document.getElementById('m_discountType').value,
@@ -679,14 +760,16 @@
                 couponCode: document.getElementById('m_coupon').value,
                 merchantUrl: document.getElementById('m_url').value,
                 isActive: true,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                endDate: document.getElementById('m_endDate').value ? firebase.firestore.Timestamp.fromDate(new Date(document.getElementById('m_endDate').value)) : null
+                createdAt: serverTimestamp(),
+                endDate: document.getElementById('m_endDate').value ? Timestamp.fromDate(new Date(document.getElementById('m_endDate').value)) : null
             };
 
             try {
-                await db.collection('offers').add(data);
+                await addDoc(collection(db, 'offers'), data);
                 status.innerHTML = '<span style="color:var(--success)">✅ Successfully Synchronized!</span>';
                 e.target.reset();
+                document.getElementById('m_bankName_other').style.display = 'none';
+                window.loadOffers(); // refresh the list tab so the new offer shows up
             } catch (err) {
                 status.innerHTML = '<span style="color:var(--error)">❌ Error: ' + err.message + '</span>';
             } finally {
@@ -736,6 +819,12 @@
             });
         }
 
+        // A normalized "same offer" signature used for duplicate detection against both
+        // already-loaded offers and other rows within the same spreadsheet.
+        function offerSignature(merchant, bankName, description) {
+            return [merchant, bankName, description].map(v => (v || '').toLowerCase().trim()).join('|');
+        }
+
         function processBulkData(data) {
             parsedBulkData = data.map(item => {
                 let endDate = null;
@@ -765,14 +854,63 @@
                     couponCode: item['Coupon Code'] || '',
                     sourceUrl: item['Offer Source'] || '',
                     isActive: true,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    endDate: endDate ? firebase.firestore.Timestamp.fromDate(endDate) : null
+                    createdAt: serverTimestamp(),
+                    endDate: endDate ? Timestamp.fromDate(endDate) : null
                 };
             }).filter(i => i.merchant && i.bankName);
 
             document.getElementById('bulkCount').textContent = parsedBulkData.length;
+
+            // Flag rows whose Bank Name doesn't exactly match the Smart Wallet bank list -
+            // these are still allowed (e.g. legitimate UPI/wallet offers), but a mismatched
+            // spelling for a bank that IS in the list (e.g. "SBI" vs "SBI Card") means
+            // premium users who selected that card will silently never see this offer.
+            const knownBanksLower = new Set(SUPPORTED_BANKS.map(b => b.toLowerCase()));
+            const mismatchCount = parsedBulkData.filter(i => !knownBanksLower.has(i.bankName.toLowerCase())).length;
+
+            // Flag rows that look like duplicates of an offer already loaded in the list
+            // view, or of another row in this same spreadsheet - catches accidental
+            // re-uploads (e.g. re-syncing after fixing one typo) creating duplicate
+            // documents instead of updating the existing one. Note: this only checks
+            // against currently-loaded offers (the list view's loaded pages), not your
+            // entire Firestore catalog, so older un-loaded offers won't be caught.
+            const existingSignatures = new Set(allOffers.map(o => offerSignature(o.merchant, o.bankName, o.description)));
+            const seenInSheet = new Set();
+            const duplicateFlags = parsedBulkData.map(i => {
+                const sig = offerSignature(i.merchant, i.bankName, i.description);
+                const isDup = existingSignatures.has(sig) || seenInSheet.has(sig);
+                seenInSheet.add(sig);
+                return isDup;
+            });
+            const duplicateCount = duplicateFlags.filter(Boolean).length;
+
+            const warningEl = document.getElementById('bulkBankWarning');
+            const warnings = [];
+            if (mismatchCount > 0) {
+                warnings.push(`⚠️ ${mismatchCount} row(s) have a Bank Name that doesn't exactly match the Smart Wallet bank list. If this is meant to be one of the known banks, fix the spelling before syncing - otherwise premium users who selected that card won't see these offers.`);
+            }
+            if (duplicateCount > 0) {
+                warnings.push(`⚠️ ${duplicateCount} row(s) look like duplicates of an offer already loaded in the list view, or of another row in this file (matched on merchant + bank + description). Syncing will create new documents, not update the existing ones - only checked against offers currently loaded on the "Manage Offers" tab.`);
+            }
+            if (warnings.length > 0) {
+                warningEl.style.display = 'block';
+                warningEl.textContent = warnings.join(' ');
+            } else {
+                warningEl.style.display = 'none';
+            }
+
             const tbody = document.querySelector('#bulkTable tbody');
-            tbody.innerHTML = parsedBulkData.slice(0, 5).map(i => `<tr><td>${escapeHtml(i.merchant)}</td><td>${escapeHtml(i.bankName)}</td><td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.discountValue)}</td><td>${escapeHtml(i.endDate ? i.endDate.toDate().toLocaleDateString() : 'N/A')}</td></tr>`).join('');
+            tbody.innerHTML = parsedBulkData.slice(0, 5).map((i, idx) => {
+                const isMismatch = !knownBanksLower.has(i.bankName.toLowerCase());
+                const isDup = duplicateFlags[idx];
+                const bankCell = isMismatch
+                    ? `<span style="color:#FFC107;" title="Doesn't match a known Smart Wallet bank">${escapeHtml(i.bankName)} ⚠️</span>`
+                    : escapeHtml(i.bankName);
+                const merchantCell = isDup
+                    ? `<span style="color:#FF5252;" title="Looks like a duplicate of an existing offer">${escapeHtml(i.merchant)} ⚠️</span>`
+                    : escapeHtml(i.merchant);
+                return `<tr><td>${merchantCell}</td><td>${bankCell}</td><td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.discountValue)}</td><td>${escapeHtml(i.endDate ? i.endDate.toDate().toLocaleDateString() : 'N/A')}</td></tr>`;
+            }).join('');
             document.getElementById('bulkPreview').style.display = 'block';
         }
 
@@ -780,18 +918,34 @@
             const btn = document.getElementById('bulkUploadBtn');
             const status = document.getElementById('bulkStatus');
             btn.disabled = true; btn.textContent = 'Syncing...';
-            
+
+            // Firestore hard-caps a single batch write at 500 operations, so a spreadsheet
+            // larger than that must be split into multiple sequential batch commits.
+            const BATCH_LIMIT = 450;
+            const chunks = [];
+            for (let i = 0; i < parsedBulkData.length; i += BATCH_LIMIT) {
+                chunks.push(parsedBulkData.slice(i, i + BATCH_LIMIT));
+            }
+
+            let syncedCount = 0;
             try {
-                const batch = db.batch();
-                parsedBulkData.forEach(item => {
-                    const ref = db.collection('offers').doc();
-                    batch.set(ref, { ...item, id: ref.id });
-                });
-                await batch.commit();
-                status.innerHTML = `<span style="color:var(--success)">✅ Successfully synced ${parsedBulkData.length} offers!</span>`;
+                for (let c = 0; c < chunks.length; c++) {
+                    if (chunks.length > 1) {
+                        btn.textContent = `Syncing batch ${c + 1}/${chunks.length}...`;
+                    }
+                    const batch = writeBatch(db);
+                    chunks[c].forEach(item => {
+                        const ref = doc(collection(db, 'offers'));
+                        batch.set(ref, { ...item, id: ref.id });
+                    });
+                    await batch.commit();
+                    syncedCount += chunks[c].length;
+                }
+                status.innerHTML = `<span style="color:var(--success)">✅ Successfully synced ${syncedCount} offers!</span>`;
                 document.getElementById('bulkPreview').style.display = 'none';
+                window.loadOffers(); // refresh the list tab so the new offers show up
             } catch (err) {
-                status.innerHTML = `<span style="color:var(--error)">❌ Migration Failed: ${err.message}</span>`;
+                status.innerHTML = `<span style="color:var(--error)">❌ Migration failed after ${syncedCount} of ${parsedBulkData.length} offers synced: ${err.message}</span>`;
             } finally {
                 btn.disabled = false; btn.textContent = 'Sync to Firestore';
             }
@@ -801,8 +955,8 @@
         let affConfig = { enabled: false, providers: { cuelinks: { enabled: false, priority: 10 }, vcommission: { enabled: false, priority: 5 }, amazon: { enabled: false, priority: 1 } } };
 
         function loadAffiliateConfig() {
-            db.collection('config').doc('affiliates').get().then(doc => {
-                if (doc.exists) affConfig = doc.data();
+            getDoc(doc(db, 'config', 'affiliates')).then(snap => {
+                if (snap.exists()) affConfig = snap.data();
                 renderAffUI();
             });
         }
@@ -831,11 +985,11 @@
             }).join('');
         }
 
-        async function saveAffiliateConfig() {
+        window.saveAffiliateConfig = async function() {
             const conf = {
                 enabled: document.getElementById('affGlobalToggle').checked,
                 providers: {},
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: serverTimestamp()
             };
             ['cuelinks', 'vcommission', 'amazon'].forEach(p => {
                 conf.providers[p] = {
@@ -843,10 +997,10 @@
                     priority: parseInt(document.getElementById('prio_' + p).value)
                 };
             });
-            await db.collection('config').doc('affiliates').set(conf);
+            await setDoc(doc(db, 'config', 'affiliates'), conf);
             alert('Cloud Configuration Updated!');
             loadAffiliateConfig();
-        }
+        };
     </script>
 </body>
 
