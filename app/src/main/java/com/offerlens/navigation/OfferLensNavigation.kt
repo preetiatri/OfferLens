@@ -4,38 +4,27 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.offerlens.ui.auth.SignInScreen
 import com.offerlens.ui.home.NeoGlassmorphicHomeScreen
 import com.offerlens.ui.onboarding.OnboardingScreen
+import com.offerlens.ui.settings.AboutScreen
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun OfferLensNavigation() {
     val navController = rememberNavController()
 
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val startDestination = if (currentUser != null) "home" else "onboarding"
+
     NavHost(
         navController = navController,
-        startDestination = "onboarding" // Start with onboarding for production
+        startDestination = startDestination
     ) {
         composable("onboarding") {
             OnboardingScreen(
                 onOnboardingComplete = {
                     navController.navigate("home") {
                         popUpTo("onboarding") { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        composable("signin") {
-            SignInScreen(
-                onSignInSuccess = {
-                    navController.navigate("home") {
-                        popUpTo("signin") { inclusive = true }
-                    }
-                },
-                onSkipToAnonymous = {
-                    navController.navigate("home") {
-                        popUpTo("signin") { inclusive = true }
                     }
                 }
             )
@@ -54,7 +43,21 @@ fun OfferLensNavigation() {
                 },
                 onCalculatorClick = {
                     navController.navigate("calculator")
+                },
+                onAboutClick = {
+                    navController.navigate("about")
+                },
+                onDataDeleted = {
+                    navController.navigate("onboarding") {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
+            )
+        }
+
+        composable("about") {
+            AboutScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
 

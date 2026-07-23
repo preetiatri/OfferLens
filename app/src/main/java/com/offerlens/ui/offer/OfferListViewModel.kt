@@ -15,15 +15,13 @@ import timber.log.Timber
 import java.util.*
 import javax.inject.Inject
 
-import com.offerlens.data.SampleDataSeeder
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class OfferListViewModel @Inject constructor(
     private val offerRepository: OfferRepository,
     private val authRepository: AuthRepository,
-    private val userRepository: UserRepository,
-    private val sampleDataSeeder: SampleDataSeeder
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _allOffers = MutableStateFlow<List<Offer>>(emptyList())
@@ -160,14 +158,4 @@ class OfferListViewModel @Inject constructor(
         _searchQuery.value = ""
     }
 
-    fun seedSampleData() {
-        viewModelScope.launch {
-            try {
-                sampleDataSeeder.seedData()
-                loadOffers() // Reload offers after seeding
-            } catch (e: Exception) {
-                Timber.e(e, "Error seeding data")
-            }
-        }
-    }
 }

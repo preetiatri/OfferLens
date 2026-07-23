@@ -20,16 +20,24 @@ class OfferDetailsViewModel @Inject constructor(
     private val _offer = MutableStateFlow<Offer?>(null)
     val offer: StateFlow<Offer?> = _offer.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     fun loadOffer(offerId: String) {
-        Timber.d("OfferDetailsViewModel", "Loading offer with ID: $offerId")
+        Timber.d("Loading offer with ID: $offerId")
+        _isLoading.value = true
         viewModelScope.launch {
-            val loadedOffer = offerRepository.getOfferById(offerId)
-            if (loadedOffer != null) {
-                Timber.d("OfferDetailsViewModel", "Offer loaded successfully: ${loadedOffer.merchant}")
-                _offer.value = loadedOffer
-            } else {
-                Timber.e("OfferDetailsViewModel", "Failed to load offer with ID: $offerId")
-                _offer.value = null
+            try {
+                val loadedOffer = offerRepository.getOfferById(offerId)
+                if (loadedOffer != null) {
+                    Timber.d("Offer loaded successfully: ${loadedOffer.merchant}")
+                    _offer.value = loadedOffer
+                } else {
+                    Timber.e("Failed to load offer with ID: $offerId")
+                    _offer.value = null
+                }
+            } finally {
+                _isLoading.value = false
             }
         }
     }

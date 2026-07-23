@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import java.util.*
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
@@ -70,7 +72,9 @@ fun NeoGlassmorphicHomeScreen(
     adManager: com.offerlens.data.AdManager? = null, // Injected via composition or manual passed
     onOfferClick: (String) -> Unit,
     onViewAllOffers: () -> Unit,
-    onCalculatorClick: () -> Unit = {}
+    onCalculatorClick: () -> Unit = {},
+    onAboutClick: () -> Unit = {},
+    onDataDeleted: () -> Unit = {}
 ) {
     val offers by viewModel.offers.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -81,6 +85,8 @@ fun NeoGlassmorphicHomeScreen(
     val userName = viewModel.userName
     val userPhotoUrl = viewModel.userPhotoUrl
     var showUserDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var isDeletingData by remember { mutableStateOf(false) }
     val context = LocalContext.current
     
     val categories = remember { 
@@ -245,6 +251,22 @@ fun NeoGlassmorphicHomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = stringResource(R.string.cd_refresh),
+                                tint = RoyalGreen
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onAboutClick,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "About & Legal",
                                 tint = RoyalGreen
                             )
                         }
@@ -505,6 +527,19 @@ fun NeoGlassmorphicHomeScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(stringResource(R.string.tap_to_copy_hint), color = Color.DarkGray, fontSize = 10.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Delete My Data",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable {
+                                    showUserDialog = false
+                                    showDeleteConfirmDialog = true
+                                }
+                            )
                         }
                     },
                     confirmButton = {
@@ -520,6 +555,50 @@ fun NeoGlassmorphicHomeScreen(
                     dismissButton = {
                         TextButton(onClick = { showUserDialog = false }) {
                             Text(stringResource(R.string.close_button), color = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    textContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (showDeleteConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { if (!isDeletingData) showDeleteConfirmDialog = false },
+                    title = { Text("Delete My Data?", color = MaterialTheme.colorScheme.error) },
+                    text = {
+                        Text(
+                            "This permanently deletes your saved preferences and account from OfferLens. " +
+                                "This cannot be undone. Any Play Store purchases are unaffected and can be " +
+                                "restored later if you sign back in.",
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !isDeletingData,
+                            onClick = {
+                                isDeletingData = true
+                                viewModel.deleteMyData(
+                                    onComplete = {
+                                        isDeletingData = false
+                                        showDeleteConfirmDialog = false
+                                        Toast.makeText(context, "Your data has been deleted.", Toast.LENGTH_LONG).show()
+                                        onDataDeleted()
+                                    },
+                                    onError = { error ->
+                                        isDeletingData = false
+                                        Toast.makeText(context, "Failed to delete data: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            }
+                        ) {
+                            Text(if (isDeletingData) "Deleting..." else "Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(enabled = !isDeletingData, onClick = { showDeleteConfirmDialog = false }) {
+                            Text("Cancel", color = MaterialTheme.colorScheme.primary)
                         }
                     },
                     containerColor = MaterialTheme.colorScheme.surface,

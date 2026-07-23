@@ -62,44 +62,49 @@
 <body>
     <div class="container">
         <h1>Privacy Policy for OfferLens</h1>
-        <p class="last-updated">Last Updated: February 21, 2026</p>
+        <p class="last-updated">Last Updated: July 23, 2026</p>
 
         <p>OfferLens ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we
-            collect, use, disclose, and safeguard your information when you use our mobile application (the "App").</p>
+            collect, use, disclose, and safeguard your information when you use our mobile application (the "App").
+            OfferLens is an independent offer-discovery tool and is <strong>not affiliated with, endorsed by, or
+            sponsored by</strong> any bank, card issuer, or merchant named or displayed in the App.</p>
 
         <h2>1. Information We Collect</h2>
         <h3>A. Personal Data</h3>
-        <p>When you register for the App, we may collect information that identifies you, such as:</p>
+        <p>Most users interact with the App without creating a traditional account (we use anonymous sign-in by
+            default). Data associated with your app instance may include:</p>
         <ul>
-            <li><strong>Device Identifiers</strong>: Unique ID for your mobile device used for personalization and ad
-                tracking.</li>
+            <li><strong>Device/Advertising Identifiers</strong>: Used by AdMob for ad delivery and, where enabled by
+                your device settings, ad personalization.</li>
             <li><strong>User Preferences</strong>: Selected banks and payment types to personalize offer discovery.</li>
         </ul>
 
-        <h3>B. Usage Data</h3>
+        <h3>B. Usage & Diagnostic Data</h3>
         <p>We automatically collect information when you access the App:</p>
         <ul>
-            <li><strong>Log Information</strong>: Details about how you use the App, including offer clicks, features
-                accessed, and interaction times.</li>
-            <li><strong>Financial Interaction</strong>: Information about which offers you view and save (stored locally
-                or in secure cloud storage).</li>
+            <li><strong>Log Information</strong>: Details about how you use the App, including offer views and
+                interaction times.</li>
+            <li><strong>Crash & Diagnostic Data</strong>: Via Google Firebase Crashlytics, we collect crash reports,
+                stack traces, and basic device information (device model, OS version) to identify and fix bugs. This
+                collection begins automatically when the App starts, before any other screen is shown, so that we can
+                diagnose crashes that happen during startup.</li>
         </ul>
 
         <h2>2. How We Use Your Information</h2>
         <p>We use information collected about you via the App to:</p>
         <ul>
-            <li>Create and manage your account.</li>
             <li>Personalize your experience by showing offers matching your selected banks/cards.</li>
             <li>Provide and maintain the Savings Calculator functionality.</li>
             <li>Deliver advertisements (banners and interstitials) for non-premium users.</li>
+            <li>Diagnose and fix crashes and technical issues.</li>
             <li>Perform analytics to improve App performance and user experience.</li>
         </ul>
 
         <h2>3. Disclosure of Your Information</h2>
         <p>We do not sell your personal data. We may share information with:</p>
         <ul>
-            <li><strong>Service Providers</strong>: Google Firebase (authentication/database) and Google AdMob
-                (advertisements).</li>
+            <li><strong>Service Providers</strong>: Google Firebase (authentication, database, crash reporting,
+                analytics) and Google AdMob (advertisements).</li>
             <li><strong>Legal Requirements</strong>: If required by law or to protect our rights and safety.</li>
         </ul>
 
@@ -109,26 +114,47 @@
             <li><a href="https://www.google.com/policies/privacy/">Google Play Services</a></li>
             <li><a href="https://support.google.com/admob/answer/6128543?hl=en">AdMob</a></li>
             <li><a href="https://firebase.google.com/policies/analytics">Firebase Analytics</a></li>
+            <li><a href="https://firebase.google.com/support/privacy">Firebase Crashlytics</a></li>
         </ul>
 
         <h2>5. Security & Data Protection</h2>
         <p>We implement industry-standard security measures:</p>
         <ul>
-            <li><strong>SQLCipher Encryption</strong>: Your local data is encrypted.</li>
-            <li><strong>Firestore Security Rules</strong>: We restrict access to personal data.</li>
+            <li><strong>SQLCipher Encryption</strong>: Your local device cache is encrypted.</li>
+            <li><strong>Firestore Security Rules</strong>: We restrict access to personal data so that you can only
+                read and modify your own information.</li>
+            <li><strong>Anonymous Sign-In</strong>: We prioritize privacy by allowing you to use the App without
+                mandatory personal identification.</li>
         </ul>
 
-        <h2>6. Merchant Rights & Opt-Out</h2>
-        <p>OfferLens aggregates publicly available offer information. We respect the preferences of merchants and banks.
-        </p>
+        <h2>6. Your Rights (DPDP Act, 2023)</h2>
+        <p>If you are located in India, the Digital Personal Data Protection Act, 2023 gives you the right to:</p>
+        <ul>
+            <li>Access the personal data we hold about you.</li>
+            <li>Correct or update inaccurate data.</li>
+            <li>Request erasure of your data and account.</li>
+            <li>Withdraw consent for optional processing (e.g., personalized ads, via your device's ad settings).</li>
+        </ul>
+        <p>You can delete your locally-stored preferences and cloud-stored account data directly from the App via
+            <strong>Profile &gt; Delete My Data</strong>. This permanently removes your saved preferences and
+            anonymous account from our systems. For any other request, contact us using the details in Section 8.</p>
+
+        <h2>7. Merchant Rights & Opt-Out</h2>
+        <p>OfferLens displays offer information about banks, card issuers, and merchants for informational purposes
+            only, and is not affiliated with or endorsed by them. We respect the preferences of merchants and banks.
+            Offer data is currently added and reviewed manually by our team; if we introduce any automated data
+            collection in the future, we will honor <code>robots.txt</code> and applicable scraping restrictions.</p>
         <ul>
             <li><strong>Merchant Opt-Out</strong>: If you are a merchant and wish to have your offers removed, please
-                use our <a href="merchant-opt-out.html">Merchant Opt-Out Form</a>.</li>
+                use our <a href="../merchant-opt-out.html">Merchant Opt-Out Form</a>.</li>
         </ul>
 
-        <h2>7. Contact Us</h2>
-        <p>If you have questions about this Privacy Policy, please contact us at:</p>
-        <p><strong>Email:</strong> support@ipreu.co.in</p>
+        <h2>8. Contact Us / Grievance Officer</h2>
+        <p>For questions about this Privacy Policy, or to exercise your data rights under Section 6, please contact:
+        </p>
+        <p><strong>Grievance Officer:</strong> OfferLens Support Team<br>
+            <strong>Email:</strong> support@ipreu.co.in<br>
+            <strong>Response Time:</strong> We aim to acknowledge requests within 7 business days.</p>
     </div>
 </body>
 

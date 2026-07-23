@@ -11,13 +11,9 @@ class UserRepository @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
     suspend fun saveUserPreferences(userId: String, user: User) {
-        try {
-            firestore.collection("users").document(userId)
-                .set(user, SetOptions.merge())
-                .await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        firestore.collection("users").document(userId)
+            .set(user, SetOptions.merge())
+            .await()
     }
 
     suspend fun getUser(userId: String): User? {
@@ -28,5 +24,13 @@ class UserRepository @Inject constructor(
             e.printStackTrace()
             null
         }
+    }
+
+    /**
+     * Permanently deletes the user's Firestore document (preferences, premium flag).
+     * Used by the in-app "Delete My Data" flow to satisfy DPDP Act erasure requests.
+     */
+    suspend fun deleteUserData(userId: String) {
+        firestore.collection("users").document(userId).delete().await()
     }
 }

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import com.offerlens.data.Offer
+import timber.log.Timber
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -26,7 +27,7 @@ object AffiliateManager {
             db.collection("config").document("affiliates")
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
-                        android.util.Log.e("AffiliateManager", "Listen failed.", e)
+                        Timber.e(e, "Listen failed.")
                         isAffiliateSystemEnabled = false // Bulletproof Offline/Failure fallback
                         return@addSnapshotListener
                     }
@@ -35,13 +36,13 @@ object AffiliateManager {
                         isAffiliateSystemEnabled = snapshot.getBoolean("enabled") ?: false
                         // Priority Parsing could happen here based on snapshot data
                     } else {
-                        android.util.Log.d("AffiliateManager", "Config missing, using fallback.")
+                        Timber.d("Config missing, using fallback.")
                         isAffiliateSystemEnabled = false
                     }
                 }
         } catch (ex: Exception) {
             // Catches cases where Firebase might not be initialized yet
-            android.util.Log.e("AffiliateManager", "Firebase Init Error", ex)
+            Timber.e(ex, "Firebase Init Error")
             isAffiliateSystemEnabled = false
         }
     }
@@ -76,7 +77,7 @@ object AffiliateManager {
                 }
             } catch (e: Exception) {
                 // Log error safely, don't crash, continue to next provider / fallback
-                android.util.Log.e("AffiliateManager", "Provider failed", e)
+                Timber.e(e, "Provider failed")
             }
         }
 

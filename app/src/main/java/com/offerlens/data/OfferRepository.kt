@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -38,13 +40,16 @@ class OfferRepository @Inject constructor(
                 Timber.d("Starting background sync for offers...")
                 // Initial fetch to populate/refresh cache
                 getOffers(forceRefresh = true)
+                clearOldCache()
                 Timber.d("Background sync completed")
             } catch (e: Exception) {
-                Timber.e("Background sync failed: ${e.message}")
+                Timber.e(e, "Background sync failed")
             }
         }
     }
-    // Pagination state
+    // Pagination state - guarded by paginationMutex since HomeViewModel and OfferListViewModel
+    // can both call getOffers()/loadMoreOffers() concurrently on this shared singleton.
+    private val paginationMutex = Mutex()
     private var lastVisibleDocument: com.google.firebase.firestore.DocumentSnapshot? = null
     private var isLastPageReached = false
     private val PAGE_SIZE = 20L
@@ -60,13 +65,13 @@ class OfferRepository @Inject constructor(
         isLoadMore: Boolean = false
     ): List<Offer> {
         return try {
-            Timber.d("OfferRepository", "========== FETCHING OFFERS (LoadMore: $isLastPageReached) ==========")
+            Timber.d("========== FETCHING OFFERS (LoadMore: $isLastPageReached) ==========")
             
             // If just loading from cache (initial load)
             if (!forceRefresh && !isLoadMore) {
                 val cached = getCachedOffers()
                 if (cached.isNotEmpty()) {
-                    Timber.d("OfferRepository", "Returning ${cached.size} cached offers")
+                    Timber.d("Returning ${cached.size} cached offers")
                     
                     // Check Time-To-Live (TTL) Cache to prevent unnecessary Firebase reads
                     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -74,19 +79,22 @@ class OfferRepository @Inject constructor(
                     val now = System.currentTimeMillis()
                     
                     if (now - lastFetch < CACHE_TTL_MS) {
-                        Timber.d("OfferRepository", "Cache is fresh (TTL active). Skipping Firebase fetch.")
+                        Timber.d("Cache is fresh (TTL active). Skipping Firebase fetch.")
                         return cached
                     }
                 }
             }
 
-            // Sync with Firebase
-            if (isLoadMore && isLastPageReached) {
-                Timber.d("OfferRepository", "End of list reached, no more offers to fetch")
-                return getCachedOffers()
+            // Sync with Firebase. The check-then-fetch-then-advance-cursor sequence must be
+            // atomic since this repository is a singleton shared by multiple ViewModels
+            // (e.g. Home + OfferList) that can call getOffers()/loadMoreOffers() concurrently.
+            val firebaseOffers = paginationMutex.withLock {
+                if (isLoadMore && isLastPageReached) {
+                    Timber.d("End of list reached, no more offers to fetch")
+                    return getCachedOffers()
+                }
+                fetchFromFirebase(isLoadMore)
             }
-
-            val firebaseOffers = fetchFromFirebase(isLoadMore)
             
             // Re-enabled: Clear cache on fresh load (Page 1) to ensure we remove Deactivated offers.
             // If we don't do this, offers deactivated in the Admin Panel will remain "Active" in the local cache.
@@ -94,7 +102,7 @@ class OfferRepository @Inject constructor(
                 // Re-enabled: Clear cache on fresh load (Page 1) to ensure we remove Deactivated offers.
                 // If we don't do this, offers deactivated in the Admin Panel will remain "Active" in the local cache.
                 if (!isLoadMore) {
-                    Timber.d("OfferRepository", "Fresh load - Updating cache safely")
+                    Timber.d("Fresh load - Updating cache safely")
                     // CRITICAL FIX: Do NOT delete all offers. 
                     // Instead, we should ideally only delete offers that are no longer valid.
                     // However, since we don't have a "sync tokens" mechanism yet, a full wipe was the naive approach.
@@ -111,7 +119,7 @@ class OfferRepository @Inject constructor(
                     // We rely on `clearOldCache()` (called periodically) to remove stale ones.
                 }
 
-                Timber.d("OfferRepository", "Caching ${firebaseOffers.size} offers")
+                Timber.d("Caching ${firebaseOffers.size} offers")
                 offerDao.insertOffers(firebaseOffers.map { it.toEntity() })
             }
             
@@ -124,7 +132,7 @@ class OfferRepository @Inject constructor(
             // Return all currently cached offers (which now includes the new ones)
             getCachedOffers()
         } catch (e: Exception) {
-            Timber.e("OfferRepository", "Error: ${e.message}")
+            Timber.e(e, "Error fetching offers")
             getCachedOffers()
         }
     }
@@ -133,7 +141,7 @@ class OfferRepository @Inject constructor(
      * Fetch offers from Firebase Firestore with Pagination
      */
     private suspend fun fetchFromFirebase(isLoadMore: Boolean): List<Offer> {
-        Timber.d("OfferRepository", "Querying Firestore (Page Size: $PAGE_SIZE)...")
+        Timber.d("Querying Firestore (Page Size: $PAGE_SIZE)...")
         
         var query = firestore.collection("offers")
             .whereEqualTo("isActive", true)
@@ -142,9 +150,9 @@ class OfferRepository @Inject constructor(
 
         if (isLoadMore && lastVisibleDocument != null) {
             query = query.startAfter(lastVisibleDocument!!)
-            Timber.d("OfferRepository", "Fetching NEXT page...")
+            Timber.d("Fetching NEXT page...")
         } else if (!isLoadMore) {
-            Timber.d("OfferRepository", "Fetching FIRST page (resetting cursor)...")
+            Timber.d("Fetching FIRST page (resetting cursor)...")
             lastVisibleDocument = null
             isLastPageReached = false
         }
@@ -155,13 +163,13 @@ class OfferRepository @Inject constructor(
             lastVisibleDocument = snapshot.documents[snapshot.size() - 1]
             if (snapshot.size() < PAGE_SIZE) {
                 isLastPageReached = true
-                Timber.d("OfferRepository", "Reached end of offers.")
+                Timber.d("Reached end of offers.")
             }
         } else {
             isLastPageReached = true
         }
         
-        Timber.d("OfferRepository", "Fetched: ${snapshot.documents.size} docs")
+        Timber.d("Fetched: ${snapshot.documents.size} docs")
         
         return snapshot.documents.mapNotNull { document ->
             try {
@@ -186,11 +194,11 @@ class OfferRepository @Inject constructor(
             // This prevents the infinite suspension caused by collect()
             val entities = offerDao.getAllActiveOffers().first()
             if (entities.isNotEmpty()) {
-                Timber.d("OfferRepository", "Found ${entities.size} offers in cache")
+                Timber.d("Found ${entities.size} offers in cache")
             }
             entities.map { it.toOffer() }
         } catch (e: Exception) {
-            Timber.e("OfferRepository", "Error fetching cached offers", e)
+            Timber.e(e, "Error fetching cached offers")
             emptyList()
         }
     }
@@ -206,7 +214,7 @@ class OfferRepository @Inject constructor(
     
     suspend fun getOfferById(offerId: String): Offer? {
         return try {
-            Timber.d("OfferRepository", "Fetching offer with ID: $offerId")
+            Timber.d("Fetching offer with ID: $offerId")
             
             // Try Firebase first
             val snapshot = firestore.collection("offers")
@@ -214,47 +222,28 @@ class OfferRepository @Inject constructor(
                 .get()
                 .await()
             
-            Timber.d("OfferRepository", "Document exists: ${snapshot.exists()}")
+            Timber.d("Document exists: ${snapshot.exists()}")
             
             val offer = snapshot.toObject(Offer::class.java)?.copy(id = snapshot.id)
             if (offer != null) {
-                Timber.d("OfferRepository", "Fetched offer from Firebase: ${offer.merchant} (ID: ${offer.id})")
+                Timber.d("Fetched offer from Firebase: ${offer.merchant} (ID: ${offer.id})")
                 // Cache it
                 offerDao.insertOffer(offer.toEntity())
             } else {
-                Timber.w("OfferRepository", "Offer not found in Firebase, checking cache...")
+                Timber.w("Offer not found in Firebase, checking cache...")
                 // Fallback to cache
                 val cachedEntity = offerDao.getOfferById(offerId)
                 return cachedEntity?.toOffer()
             }
             offer
         } catch (e: Exception) {
-            Timber.e("OfferRepository", "Error fetching offer by ID: $offerId, checking cache", e)
+            Timber.e(e, "Error fetching offer by ID: $offerId, checking cache")
             // Fallback to cache
             val cachedEntity = offerDao.getOfferById(offerId)
             cachedEntity?.toOffer()
         }
     }
 
-    suspend fun addOffers(offers: List<Offer>) {
-        try {
-            // Add to Firebase
-            val batch = firestore.batch()
-            offers.forEach { offer ->
-                val docRef = firestore.collection("offers").document()
-                batch.set(docRef, offer)
-            }
-            batch.commit().await()
-            Timber.d("OfferRepository", "Successfully added ${offers.size} offers to Firebase")
-            
-            // Also cache locally
-            offerDao.insertOffers(offers.map { it.toEntity() })
-            Timber.d("OfferRepository", "Successfully cached ${offers.size} offers locally")
-        } catch (e: Exception) {
-            Timber.e("OfferRepository", "Error adding offers", e)
-            throw e
-        }
-    }
     
     /**
      * Clear old cached offers (older than 7 days)
@@ -263,9 +252,9 @@ class OfferRepository @Inject constructor(
         try {
             val sevenDaysAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000)
             offerDao.deleteOldOffers(sevenDaysAgo)
-            Timber.d("OfferRepository", "Cleared old cached offers")
+            Timber.d("Cleared old cached offers")
         } catch (e: Exception) {
-            Timber.e("OfferRepository", "Error clearing old cache", e)
+            Timber.e(e, "Error clearing old cache")
         }
     }
 }

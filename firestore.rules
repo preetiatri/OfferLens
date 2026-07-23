@@ -67,11 +67,14 @@ service cloud.firestore {
       allow create: if isOwner(userId) && 
                       !request.resource.data.keys().hasAny(['isPremium', 'admin']);
       
-      allow update: if isOwner(userId) && 
+      allow update: if isOwner(userId) &&
                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium', 'admin']);
-      
+
       // Admin can read all users (for analytics)
       allow read: if isAdmin();
+
+      // Users can delete their own data (DPDP Act erasure request via in-app "Delete My Data")
+      allow delete: if isOwner(userId);
     }
     
     // ========================================
@@ -124,7 +127,13 @@ service cloud.firestore {
     // ========================================
     match /logs/{logId} {
       // Users can create error logs (for crash reporting)
-      allow create: if isAuthenticated();
+      // Bounded schema to prevent cost-DoS via arbitrarily large/frequent writes
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasOnly(['userId', 'message', 'stackTrace', 'timestamp', 'severity']) &&
+                       request.resource.data.message is string &&
+                       request.resource.data.message.size() < 2000 &&
+                       (!('stackTrace' in request.resource.data) || (request.resource.data.stackTrace is string && request.resource.data.stackTrace.size() < 4000));
       
       // Only admin can read logs
       allow read: if isAdmin();
@@ -159,6 +168,7 @@ service cloud.firestore {
     // ========================================
     match /opt_out_merchants/{optOutId} {
       // Allow creation by anyone (public form) but validate schema
+      // Append-only to prevent tampering
       allow create: if request.resource.data.keys().hasAll(['merchant', 'contactName', 'email', 'reason']) &&
                    request.resource.data.merchant is string &&
                    request.resource.data.email is string &&

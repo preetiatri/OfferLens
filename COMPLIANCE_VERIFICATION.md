@@ -1,6 +1,17 @@
 # ✅ Legal Compliance Verification Checklist
 
-## Status: ALL IMPLEMENTED ✅
+> **⚠️ STATUS CORRECTION (2026-07-23):** This document describes a web-scraping pipeline
+> (robots.txt checking, rate limiting, source-config prioritization) that is **not currently
+> deployed**. `functions/src/index.ts` — the only tracked, deployable Cloud Functions source —
+> contains no scraping, moderation, or submission logic; it is effectively empty. The safeguards
+> described below exist only as untracked local build output with no corresponding source in
+> git. **Offer data is currently 100% manually entered by an admin** via the web admin panel —
+> there is no live scraping or automated user-submission system. Treat the content below as a
+> historical design reference, not a description of what's currently running. If automated
+> scraping is reintroduced in the future, these safeguards should be re-implemented and verified
+> against the actual deployed code before repeating claims like "ALL IMPLEMENTED" here.
+
+## Status: ALL IMPLEMENTED ✅ *(see correction above — historical/aspirational, not current)*
 
 ### 1. ✅ Prioritize Official APIs Over Scraping
 

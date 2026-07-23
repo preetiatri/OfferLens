@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +28,7 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = hiltViewModel(),
     onOnboardingComplete: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedBanks by remember { mutableStateOf(setOf<String>()) }
     var selectedPaymentTypes by remember { mutableStateOf(setOf<String>()) }
 
@@ -40,13 +43,14 @@ fun OnboardingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Top
         ) {
             // Welcome Section
             Text(
-                text = "Welcome to",
+                text = context.getString(com.offerlens.R.string.welcome_to),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -77,7 +81,75 @@ fun OnboardingScreen(
                 FeatureItem("🔔", "Real-time Updates", "Never miss a great deal")
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Payment Types Selection
+            Text(
+                text = "Which payment methods do you use?",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(104.dp)
+            ) {
+                items(paymentTypes) { type ->
+                    SelectableChip(
+                        text = type,
+                        isSelected = type in selectedPaymentTypes,
+                        onClick = {
+                            selectedPaymentTypes = if (type in selectedPaymentTypes) {
+                                selectedPaymentTypes - type
+                            } else {
+                                selectedPaymentTypes + type
+                            }
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Bank Selection
+            Text(
+                text = "Which banks/cards do you use? (optional)",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(328.dp)
+            ) {
+                items(banks) { bank ->
+                    SelectableChip(
+                        text = bank,
+                        isSelected = bank in selectedBanks,
+                        onClick = {
+                            selectedBanks = if (bank in selectedBanks) {
+                                selectedBanks - bank
+                            } else {
+                                selectedBanks + bank
+                            }
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Legal Disclaimer
             Card(
@@ -97,7 +169,7 @@ fun OnboardingScreen(
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
-                        text = "By continuing, you agree that all offer information is provided \"as is\" for informational purposes only. You must verify all offer details, terms, and conditions on the merchant's official website before purchase. OfferLens is not responsible for offer validity, cashback eligibility, missing rewards, or any transaction issues.",
+                        text = "OfferLens is an independent, unofficial aggregator and is not affiliated with, endorsed by, or sponsored by any bank, card issuer, or merchant shown in the App. By continuing, you agree that all offer information is provided \"as is\" for informational purposes only. You must verify all offer details, terms, and conditions on the merchant's official website before purchase. OfferLens is not responsible for offer validity, cashback eligibility, missing rewards, or any transaction issues.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
@@ -107,16 +179,15 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val context = androidx.compose.ui.platform.LocalContext.current
             
             Button(
                 onClick = {
-                    Timber.d("OnboardingScreen", "Continue button clicked")
+                    Timber.d("Continue button clicked")
                     
                     // Show toast to user
                     android.widget.Toast.makeText(
                         context,
-                        "Signing in... Please wait",
+                        context.getString(com.offerlens.R.string.signing_in_wait),
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                     
@@ -125,19 +196,19 @@ fun OnboardingScreen(
                         selectedBanks.toList(),
                         selectedPaymentTypes.toList(),
                         onComplete = {
-                            Timber.d("OnboardingScreen", "onComplete called")
+                            Timber.d("onComplete called")
                             android.widget.Toast.makeText(
                                 context,
-                                "Welcome to OfferLens!",
+                                context.getString(com.offerlens.R.string.welcome_back),
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
                             onOnboardingComplete()
                         },
                         onError = { error ->
-                            Timber.e("OnboardingScreen", "Error: ${error.message}", error)
+                            Timber.e(error, "Error: ${error.message}")
                             android.widget.Toast.makeText(
                                 context,
-                                "Error: ${error.message}",
+                                context.getString(com.offerlens.R.string.error_saving_profile),
                                 android.widget.Toast.LENGTH_LONG
                             ).show()
                         }
@@ -166,7 +237,7 @@ fun OnboardingScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Get Started",
+                        text = context.getString(com.offerlens.R.string.get_started),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary

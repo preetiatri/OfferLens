@@ -46,15 +46,13 @@ fun OfferDetailsScreen(
 ) {
     val context = LocalContext.current
     val offer by viewModel.offer.collectAsState()
-    var showError by remember { mutableStateOf(false) }
+    val isLoading by viewModel.isLoading.collectAsState()
+    // Error state reflects the ViewModel's actual load outcome, not a fixed timer -
+    // avoids flashing a false "failed to load" message while a slow request is still in flight.
+    val showError = !isLoading && offer == null
 
     LaunchedEffect(offerId) {
         viewModel.loadOffer(offerId)
-        // Show error after 5 seconds if offer still not loaded
-        kotlinx.coroutines.delay(5000)
-        if (offer == null) {
-            showError = true
-        }
     }
 
     Box(
@@ -401,11 +399,11 @@ fun OfferDetailsScreen(
                 }
                 
                 Spacer(modifier = Modifier.height(32.dp))
-                
-                // Terms & Conditions Section
+
+                // Terms & Conditions Section (only shown when the offer actually has T&C text)
                 if (currentOffer.termsAndConditions.isNotEmpty()) {
                     var isExpanded by remember { mutableStateOf(false) }
-                    
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -441,7 +439,7 @@ fun OfferDetailsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        
+
                         if (isExpanded) {
                             Spacer(modifier = Modifier.height(16.dp))
                             HorizontalDivider(
@@ -457,35 +455,36 @@ fun OfferDetailsScreen(
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Disclaimer
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        shape = RoundedCornerShape(12.dp)
+                }
+
+                // Disclaimer - always shown regardless of whether this offer has T&C text,
+                // since the risk (unverified offer, no OfferLens liability) is the same either way.
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = (if (isSystemInDarkTheme()) NeonOrange else OrangeBurnt).copy(alpha = 0.7f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "⚠️ IMPORTANT: Please verify this offer on ${currentOffer.merchant}'s official website before making a purchase. Offer details, terms, and conditions may change without notice. OfferLens is not responsible for offer validity, cashback eligibility, missing rewards, or any transaction issues.",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = (if (isSystemInDarkTheme()) NeonOrange else OrangeBurnt).copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "⚠️ IMPORTANT: Please verify this offer on ${currentOffer.merchant}'s official website before making a purchase. Offer details, terms, and conditions may change without notice. OfferLens is an independent aggregator, not affiliated with or endorsed by ${currentOffer.bankName.ifEmpty { "the issuing bank" }} or ${currentOffer.merchant}, and is not responsible for offer validity, cashback eligibility, missing rewards, or any transaction issues.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
                     }
                 }
 

@@ -22,32 +22,37 @@ class OnboardingViewModel @Inject constructor(
         onComplete: () -> Unit,
         onError: (Exception) -> Unit = {}
     ) {
-        Timber.d("OnboardingViewModel", "completeOnboarding called with banks: $selectedBanks, types: $selectedPaymentTypes")
+        Timber.d("completeOnboarding called with banks: $selectedBanks, types: $selectedPaymentTypes")
         viewModelScope.launch {
             try {
                 // Sign in anonymously
-                Timber.d("OnboardingViewModel", "Attempting anonymous sign in...")
+                Timber.d("Attempting anonymous sign in...")
                 val userResult = authRepository.signInAnonymously()
                 if (userResult.isSuccess) {
                     val firebaseUser = userResult.getOrThrow()
-                    Timber.d("OnboardingViewModel", "Sign in successful, user ID: ${firebaseUser.uid}")
+                    Timber.d("Sign in successful, user ID: ${firebaseUser.uid}")
                     val user = User(
                         id = firebaseUser.uid,
                         preferredBanks = selectedBanks,
                         preferredPaymentTypes = selectedPaymentTypes,
                         email = firebaseUser.email ?: ""
                     )
-                    Timber.d("OnboardingViewModel", "Saving user preferences...")
-                    userRepository.saveUserPreferences(firebaseUser.uid, user)
-                    Timber.d("OnboardingViewModel", "User preferences saved, calling onComplete")
-                    onComplete()
+                    Timber.d("Saving user preferences...")
+                    try {
+                        userRepository.saveUserPreferences(firebaseUser.uid, user)
+                        Timber.d("User preferences saved, calling onComplete")
+                        onComplete()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to save user preferences: ${e.message}")
+                        onError(e)
+                    }
                 } else {
                     val error = userResult.exceptionOrNull() as? Exception ?: Exception("Unknown error")
-                    Timber.e("OnboardingViewModel", "Sign in failed: ${error.message}", error)
+                    Timber.e(error, "Sign in failed: ${error.message}")
                     onError(error)
                 }
             } catch (e: Exception) {
-                Timber.e("OnboardingViewModel", "Error in completeOnboarding: ${e.message}", e)
+                Timber.e(e, "Error in completeOnboarding: ${e.message}")
                 onError(e)
             }
         }

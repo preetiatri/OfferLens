@@ -1,5 +1,11 @@
 # Legal & Reliability Summary
 
+> **⚠️ STATUS CORRECTION (2026-07-23):** "What We've Implemented" below describes a scraping
+> pipeline that is **not currently deployed** — the live Cloud Functions backend
+> (`functions/src/index.ts`) has no scraping, rate-limiting, or moderation logic in it. Offer
+> data is currently entered manually by an admin, not scraped. This document is a historical
+> design reference, not a statement of current system behavior.
+
 ## ✅ Legal Compliance
 
 ### Is It Legal?

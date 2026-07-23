@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none';">
     <title>OfferLens Elite - Unified Admin Portal</title>
-    <!-- SheetJS for Excel Parsing -->
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS for Excel Parsing is lazy-loaded on first Bulk Upload use, see loadSheetJs() -->
     <style>
         :root {
             --primary: #00F5FF;
@@ -356,10 +356,10 @@
         </header>
 
         <nav class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('list')">Manage Offers</button>
-            <button class="tab-btn" onclick="switchTab('manual')">Add Manual</button>
-            <button class="tab-btn" onclick="switchTab('bulk')">Bulk Upload</button>
-            <button class="tab-btn" onclick="switchTab('affiliate')">Affiliation</button>
+            <button class="tab-btn active" onclick="switchTab('list', event)">Manage Offers</button>
+            <button class="tab-btn" onclick="switchTab('manual', event)">Add Manual</button>
+            <button class="tab-btn" onclick="switchTab('bulk', event)">Bulk Upload</button>
+            <button class="tab-btn" onclick="switchTab('affiliate', event)">Affiliation</button>
         </nav>
 
         <!-- View: Offer List -->
@@ -508,7 +508,7 @@
 
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyB4zSQknYBomEzYWv29rvoasRJG5QV0VZ8",
+            apiKey: "AIzaSyDw_Q6b-J_e34YPI_YopssrlROU1lKPMok",
             authDomain: "offerlens.firebaseapp.com",
             projectId: "offerlens",
             storageBucket: "offerlens.firebasestorage.app",
@@ -532,6 +532,7 @@
             } else {
                 document.getElementById('loginSection').style.display = 'flex';
                 document.getElementById('appContainer').style.display = 'none';
+                if (offersUnsubscribe) { offersUnsubscribe(); offersUnsubscribe = null; }
             }
         });
 
@@ -547,17 +548,29 @@
         });
 
         // Tab Switching
-        function switchTab(tabId) {
+        function switchTab(tabId, evt) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            
-            event.target.classList.add('active');
+
+            (evt || window.event).target.classList.add('active');
             document.getElementById('tab-' + tabId).classList.add('active');
         }
 
+        // Escapes untrusted text before it's interpolated into innerHTML, to prevent
+        // stored XSS from offer/bulk-upload data (merchant name, description, etc.)
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML;
+        }
+
         // --- MANAGE LIST ---
+        let offersUnsubscribe = null;
         function loadOffers() {
-            db.collection('offers').orderBy('createdAt', 'desc').limit(100).onSnapshot(snap => {
+            // Avoid stacking a new live listener on top of an old one if loadOffers()
+            // is called again (e.g. sign-out then sign-in in the same page session).
+            if (offersUnsubscribe) { offersUnsubscribe(); offersUnsubscribe = null; }
+            offersUnsubscribe = db.collection('offers').orderBy('createdAt', 'desc').limit(100).onSnapshot(snap => {
                 allOffers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderOffers(allOffers);
             });
@@ -573,8 +586,8 @@
                 return `
                     <div class="offer-item" id="offer-${o.id}" style="opacity: ${active ? 1 : 0.6}">
                         <div class="offer-info">
-                            <h4>${o.merchant} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span></h4>
-                            <p>${o.bankName || ''} • ${o.description || ''}</p>
+                            <h4>${escapeHtml(o.merchant)} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span></h4>
+                            <p>${escapeHtml(o.bankName || '')} • ${escapeHtml(o.description || '')}</p>
                         </div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             ${active 
@@ -689,17 +702,38 @@
         dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleBulkFile(e.dataTransfer.files[0]); };
         document.getElementById('bulkInput').onchange = (e) => handleBulkFile(e.target.files[0]);
 
+        // Lazy-load SheetJS only when the Bulk Upload tab is actually used, instead of
+        // blocking every page load with a library most sessions never touch.
+        let sheetJsPromise = null;
+        function loadSheetJs() {
+            if (window.XLSX) return Promise.resolve();
+            if (!sheetJsPromise) {
+                sheetJsPromise = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Failed to load SheetJS'));
+                    document.head.appendChild(script);
+                });
+            }
+            return sheetJsPromise;
+        }
+
         function handleBulkFile(file) {
             if (!file) return;
             document.getElementById('bulkFileName').textContent = file.name;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const wb = XLSX.read(data, { type: 'array' });
-                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                processBulkData(json);
-            };
-            reader.readAsArrayBuffer(file);
+            loadSheetJs().then(() => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    processBulkData(json);
+                };
+                reader.readAsArrayBuffer(file);
+            }).catch(err => {
+                showToast('❌ Could not load spreadsheet library: ' + err.message, true);
+            });
         }
 
         function processBulkData(data) {
@@ -738,7 +772,7 @@
 
             document.getElementById('bulkCount').textContent = parsedBulkData.length;
             const tbody = document.querySelector('#bulkTable tbody');
-            tbody.innerHTML = parsedBulkData.slice(0, 5).map(i => `<tr><td>${i.merchant}</td><td>${i.bankName}</td><td>${i.category}</td><td>${i.discountValue}</td><td>${i.endDate ? i.endDate.toDate().toLocaleDateString() : 'N/A'}</td></tr>`).join('');
+            tbody.innerHTML = parsedBulkData.slice(0, 5).map(i => `<tr><td>${escapeHtml(i.merchant)}</td><td>${escapeHtml(i.bankName)}</td><td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.discountValue)}</td><td>${escapeHtml(i.endDate ? i.endDate.toDate().toLocaleDateString() : 'N/A')}</td></tr>`).join('');
             document.getElementById('bulkPreview').style.display = 'block';
         }
 

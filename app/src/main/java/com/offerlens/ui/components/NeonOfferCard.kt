@@ -11,7 +11,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,20 +138,36 @@ fun NeonOfferCard(
                         shape = RoundedCornerShape(12.dp)
                     )
             ) {
-                if (offer.merchantUrl.isNotEmpty()) {
+                val faviconUrl = remember(offer.merchantUrl) {
+                    if (offer.merchantUrl.isEmpty()) return@remember null
+                    try {
+                        val host = java.net.URI(offer.merchantUrl).host ?: ""
+                        if (host.isNotEmpty()) "https://www.google.com/s2/favicons?domain=$host&sz=128" else null
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                var faviconFailed by remember(offer.merchantUrl) { mutableStateOf(false) }
+
+                if (faviconUrl != null && !faviconFailed) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data("https://www.google.com/s2/favicons?domain=${java.net.URI(offer.merchantUrl).host}&sz=128")
+                            .data(faviconUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize().padding(24.dp),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        onState = { state ->
+                            if (state is coil.compose.AsyncImagePainter.State.Error) {
+                                faviconFailed = true
+                            }
+                        }
                     )
                 }
 
-                // Overlay Text (always visible if image fails or loading, but hidden if image succeeds?)
-                if (offer.merchantUrl.isEmpty()) {
+                // Fallback initial/name shown whenever there's no usable favicon URL, or it failed to load.
+                if (faviconUrl == null || faviconFailed) {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally

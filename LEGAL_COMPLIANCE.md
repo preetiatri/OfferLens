@@ -1,5 +1,11 @@
 # Web Scraping Legal Compliance & Best Practices
 
+> **⚠️ STATUS CORRECTION (2026-07-23):** This document analyzes the legal framework for a
+> scraping strategy that is **not currently deployed** in this app. The current Cloud Functions
+> backend (`functions/src/index.ts`) contains no scraping logic; offer data is entered manually
+> by an admin. This is a historical design/legal reference for if automated scraping is
+> reintroduced in the future — it does not describe current app behavior.
+
 ## ⚖️ Legal Considerations
 
 ### Is Web Scraping Legal in India?

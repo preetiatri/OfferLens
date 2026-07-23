@@ -12,7 +12,7 @@
 It will look like this:
 ```javascript
 const firebaseConfig = {
-  apiKey: "AIzaSyDsYzRXx7iFG-Ezd3Au5-VZbcA1PkhHZHU",
+  apiKey: "AIzaSyDw_Q6b-J_e34YPI_YopssrlROU1lKPMok",
   authDomain: "offerlens.firebaseapp.com",
   projectId: "offerlens",
   storageBucket: "offerlens.firebasestorage.app",

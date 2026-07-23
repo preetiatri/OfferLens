@@ -78,14 +78,18 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // 2. Filter by Smart Wallet
+        // 2. Filter by Smart Wallet (Personalized for Premium Users)
         if (isPremium && isWalletEnabled && myCards.isNotEmpty()) {
             result = result.filter { offer ->
-                // Check if offer.bankName matches any of myCards
+                if (offer.bankName.isBlank()) return@filter false
+                
+                val normalizedOfferBank = offer.bankName.lowercase().trim()
                 myCards.any { userCard -> 
-                    if (offer.bankName.isEmpty()) return@any false
-                    offer.bankName.contains(userCard, ignoreCase = true) || 
-                    userCard.contains(offer.bankName, ignoreCase = true)
+                    val normalizedUserCard = userCard.lowercase().trim()
+                    // Check for exact match or word-level containment to avoid "ICICI" matching "ICICI Amazon" incorrectly
+                    normalizedOfferBank == normalizedUserCard || 
+                    normalizedOfferBank.split(" ").any { it.length > 2 && normalizedUserCard.contains(it) } ||
+                    normalizedUserCard.split(" ").any { it.length > 2 && normalizedOfferBank.contains(it) }
                 }
             }
         }
@@ -193,6 +197,30 @@ class HomeViewModel @Inject constructor(
     // Sign-out function
     fun signOut() {
         authRepository.signOut()
+    }
+
+    /**
+     * Permanently deletes the current user's Firestore data and Auth account
+     * (DPDP Act erasure request). After this completes, the app has no signed-in
+     * user, so navigation should return to onboarding.
+     */
+    fun deleteMyData(onComplete: () -> Unit, onError: (Exception) -> Unit) {
+        val uid = authRepository.currentUser?.uid
+        if (uid == null) {
+            onError(Exception("No signed-in user"))
+            return
+        }
+        viewModelScope.launch {
+            try {
+                userRepository.deleteUserData(uid)
+                authRepository.deleteAccount().getOrThrow()
+                Timber.d("User data deleted for $uid")
+                onComplete()
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to delete user data")
+                onError(e)
+            }
+        }
     }
     
     // Filter by Query Only

@@ -120,6 +120,21 @@ fun AboutScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
+                        text = "NOT AFFILIATED WITH ANY BANK",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSystemInDarkTheme()) NeonOrange else MaterialTheme.colorScheme.error,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "OfferLens is an independent, unofficial aggregator and is not affiliated with, endorsed by, or sponsored by any bank, card issuer, or merchant shown in the App. All bank and merchant names, logos, and trademarks belong to their respective owners.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
                         text = "NO LIABILITY FOR OFFER VALIDITY",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -128,7 +143,7 @@ fun AboutScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "OfferLens aggregates publicly available offer information from various sources (User Submissions, APIs, Manual Curation). We make reasonable efforts to ensure accuracy, but offers may change, expire, or be discontinued by the merchant without notice.",
+                        text = "OfferLens aggregates offer information curated by our team. We make reasonable efforts to ensure accuracy, but offers may change, expire, or be discontinued by the merchant without notice.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                         lineHeight = 20.sp
@@ -192,11 +207,7 @@ fun AboutScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    DataSourceItem("User Submissions", "Community-contributed offers with automated validation")
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
-                    DataSourceItem("Verified Partners", "Official API partnerships with banks and merchants")
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
-                    DataSourceItem("Manual Curation", "Admin-verified offers from trusted sources")
+                    DataSourceItem("Manual Curation", "Offers are reviewed and entered by our team from publicly available sources")
                 }
             }
 

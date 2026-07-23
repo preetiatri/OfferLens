@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'public/**'
+      - 'functions/**'
+      - '.github/workflows/firebase-hosting.yml'
 
 jobs:
   build_and_deploy:
@@ -34,8 +39,18 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Run lint
+        run: ./gradlew lintDebug
+
       - name: Build Release AAB
         run: ./gradlew bundleRelease
+
+      - name: Clean up signing secrets
+        if: always()
+        run: rm -f app/keystore.jks keystore.properties app/google-services.json
 
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@v1

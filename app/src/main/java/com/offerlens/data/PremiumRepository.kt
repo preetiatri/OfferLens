@@ -81,29 +81,46 @@ class PremiumRepository @Inject constructor(
         }
     }
 
+    private var premiumListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+    private var lastKnownManualPremium: Boolean? = null
+
     private fun observeManualPremiumStatus() {
         auth.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
+
+            // Remove previous listener if exists
+            premiumListenerRegistration?.remove()
+            premiumListenerRegistration = null
+            lastKnownManualPremium = null
+
+            if (user == null) {
+                // Signed out (e.g. "Delete My Data") - don't leave a stale premium
+                // status cached for whichever account signs in next.
+                updatePremiumStatus(false)
+            }
+
             if (user != null) {
-                firestore.collection("users").document(user.uid)
+                premiumListenerRegistration = firestore.collection("users").document(user.uid)
                     .addSnapshotListener { snapshot, e ->
                         if (e != null) {
                             Timber.e(e, "Listen failed")
                             return@addSnapshotListener
                         }
-                        
+
                         val isManualPremium = snapshot?.getBoolean("isPremium") ?: false
+                        // Only react when the field actually changed - avoids an avoidable
+                        // Billing queryPurchasesAsync() call on every unrelated user-doc write.
+                        if (isManualPremium == lastKnownManualPremium) return@addSnapshotListener
+                        lastKnownManualPremium = isManualPremium
+
                         if (isManualPremium) {
                             Timber.d("Manual Premium Granted via Firestore")
                             updatePremiumStatus(true)
                         } else {
                             // If not manually granted, fall back to billing check
-                            // This ensures we don't accidentally revoke if they have a Play Store purchase
                             checkPurchases()
                         }
                     }
-            } else {
-                // User signed out, reset if needed, or rely on cache until next login
             }
         }
     }
@@ -219,12 +236,18 @@ class PremiumRepository @Inject constructor(
     }
 
     private fun syncPremiumToFirestore() {
+        // [BLOCKER RESOLVED] Client-side sync disabled because Security Rules correctly
+        // prevent users from modification of their own 'isPremium' field for security.
+        // Premium status is managed via Play Billing or manual Admin action.
+        /*
         val user = auth.currentUser ?: return
         val data = hashMapOf("isPremium" to true, "lastSynced" to System.currentTimeMillis())
         firestore.collection("users").document(user.uid)
             .set(data, SetOptions.merge())
             .addOnSuccessListener { Timber.d("Premium synced to Firestore") }
             .addOnFailureListener { e -> Timber.e(e, "Failed to sync premium") }
+        */
+        Timber.d("Premium sync skipped (Security Constraint)")
     }
 
 
@@ -241,19 +264,17 @@ class PremiumRepository @Inject constructor(
     suspend fun launchPurchaseFlow(activity: android.app.Activity) {
         // DEBUG BYPASS: Instantly grant premium in Debug builds
         if (com.offerlens.BuildConfig.DEBUG) {
-            val debugScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
-            debugScope.launch {
-                updatePremiumStatus(true)
-                syncPremiumToFirestore() // Also sync in debug for testing
+            Timber.d("DEBUG MODE: Granting premium instantly without Play Store.")
+            updatePremiumStatus(true)
+            syncPremiumToFirestore()
+            withContext(Dispatchers.Main) {
                 android.widget.Toast.makeText(
-                    activity, 
-                    "DEBUG: Premium Purchased! 💎", 
-                    android.widget.Toast.LENGTH_SHORT
+                    activity,
+                    "🛠️ DEBUG: Premium Activated! 💎",
+                    android.widget.Toast.LENGTH_LONG
                 ).show()
-                // Restart activity to reflect changes immediately
-                activity.recreate()
             }
-            return
+            return // StateFlow update auto-triggers Compose UI recomposition — no recreate needed
         }
 
         if (!ensureBillingConnection()) {

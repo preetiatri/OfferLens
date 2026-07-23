@@ -62,6 +62,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
             // Production AdMob ID
             buildConfigField("String", "ADMOB_APP_ID", "\"ca-app-pub-7195572820017273~2445725500\"")
             // Placeholders - REPLACE WITH REAL IDs

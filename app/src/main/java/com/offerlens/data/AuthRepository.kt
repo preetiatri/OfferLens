@@ -42,4 +42,18 @@ class AuthRepository @Inject constructor(
     fun signOut() {
         auth.signOut()
     }
+
+    /**
+     * Permanently deletes the current Firebase Auth account (used by the in-app
+     * "Delete My Data" flow to satisfy DPDP Act erasure requests).
+     */
+    suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            val user = auth.currentUser ?: return Result.failure(Exception("No signed-in user"))
+            user.delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
