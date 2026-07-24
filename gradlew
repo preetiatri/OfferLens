@@ -19,6 +19,25 @@
 APP_NAME="Gradle"
 APP_BASE_NAME=`basename "$0"`
 
+# Resolve APP_HOME to the directory containing this script, following any symlinks.
+# (This block was missing from the committed gradlew, leaving APP_HOME empty on
+# non-Windows shells so CLASSPATH resolved to /gradle/wrapper/gradle-wrapper.jar
+# and Java could not find org.gradle.wrapper.GradleWrapperMain.)
+PRG="$0"
+while [ -h "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=`dirname "$PRG"`"/$link"
+    fi
+done
+SAVED="`pwd`"
+cd "`dirname \"$PRG\"`/" >/dev/null
+APP_HOME="`pwd -P`"
+cd "$SAVED" >/dev/null
+
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 
