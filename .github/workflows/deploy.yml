@@ -39,6 +39,26 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # Temporary diagnostic step - remove once the wrapper-loading failure is understood.
+      - name: Debug Gradle wrapper
+        run: |
+          echo "--- file listing ---"
+          ls -la gradle/wrapper/
+          echo "--- file type ---"
+          file gradle/wrapper/gradle-wrapper.jar || echo "file command not available"
+          echo "--- sha256 ---"
+          sha256sum gradle/wrapper/gradle-wrapper.jar
+          echo "--- zip contents (looking for GradleWrapperMain.class) ---"
+          unzip -l gradle/wrapper/gradle-wrapper.jar | grep -i GradleWrapperMain || echo "CLASS NOT FOUND IN JAR"
+          echo "--- java version ---"
+          java -version
+          echo "--- JAVA_HOME ---"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "--- which java ---"
+          which java
+          echo "--- direct classpath invocation test ---"
+          java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain --version || echo "DIRECT INVOCATION FAILED"
+
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
