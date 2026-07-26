@@ -17,6 +17,14 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Google Play rejects an upload whose versionCode already exists, so every CI
+// build needs a unique, increasing value. GITHUB_RUN_NUMBER increments on each
+// workflow run and never resets, which satisfies that. Local builds (where the
+// variable is unset) fall back to 1 - they are never uploaded to Play.
+// NOTE: this only ever increases. If you later publish a build with a higher
+// versionCode by hand, bump the offset below to stay ahead of it.
+val ciVersionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.offerlens"
     compileSdk = 34
@@ -25,7 +33,7 @@ android {
         applicationId = "com.offerlens.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
+        versionCode = ciVersionCode
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

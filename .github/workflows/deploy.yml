@@ -89,15 +89,33 @@ jobs:
       - name: Build Release AAB
         run: ./gradlew bundleRelease
 
+      # Keep the signed bundle available for download from the run summary. Needed
+      # for the one-off manual first upload to Play Console (the Publishing API
+      # cannot create a new app's first release), and useful for debugging after.
+      # TODO pin to a SHA: unlike the other actions here, this one has never run in
+      # this repo, so there is no resolved "Download action repository (SHA:...)"
+      # line to copy from. After the next run, take the SHA from that log line and
+      # pin it the same way as the actions above.
+      - name: Upload AAB as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Clean up signing secrets
         if: always()
         run: rm -f app/keystore.jks keystore.properties app/google-services.json
 
+      # Publishes to the internal testing track, not production. CI should never
+      # push straight to production: internal releases are visible only to your
+      # testers, and you promote to production manually in Play Console when ready.
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON }}
           packageName: com.offerlens.app
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: production
+          track: internal
           status: draft
