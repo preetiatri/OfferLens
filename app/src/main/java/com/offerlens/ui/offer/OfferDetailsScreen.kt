@@ -472,13 +472,24 @@ fun OfferDetailsScreen(
 
                 Spacer(modifier = Modifier.height(48.dp))
 
-                // External Links (Merchant + Source)
+                // External Links.
+                //
+                // For portal offers (Axis Grab Deals and similar) the discount only applies
+                // if the user STARTS at the bank's page and authenticates there - going
+                // straight to the merchant silently forfeits it. Leading with "Visit
+                // <merchant>" in that case would send users past the offer while our
+                // affiliate link still fired, i.e. we'd earn on a click that cost the user
+                // the very discount we advertised. So when a code is only issued on the
+                // bank's site, the source link is promoted to primary and the direct
+                // merchant link is labelled as not carrying the offer.
+                val startAtSource = currentOffer.couponRevealedOnSite &&
+                    currentOffer.offerSourceUrl.isNotEmpty()
+
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // 1. Visit Merchant Button (Primary)
-                    if (currentOffer.merchantUrl.isNotEmpty()) {
+                    if (startAtSource) {
                         Button(
                             onClick = {
-                                com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = false)
+                                com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = true)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -488,10 +499,11 @@ fun OfferDetailsScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Visit ${currentOffer.merchant}",
+                                    text = if (currentOffer.bankName.isNotBlank())
+                                        "Start at ${currentOffer.bankName}" else "Start at bank page",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White // Always white on Primary/Neon button
+                                    color = Color.White
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(
@@ -502,33 +514,87 @@ fun OfferDetailsScreen(
                                 )
                             }
                         }
-                    }
-
-                    // 2. View Offer Source (Secondary)
-                    if (currentOffer.offerSourceUrl.isNotEmpty()) {
-                        OutlinedButton(
-                            onClick = {
-                                com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = true)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            shape = RoundedCornerShape(28.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "This offer must be started from the bank's page to apply.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (currentOffer.merchantUrl.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = {
+                                    com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = false)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
                                 Text(
-                                    text = "View Offer Source (e.g. Bank Page)",
+                                    text = "Go to ${currentOffer.merchant} without this offer",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            }
+                        }
+                    } else {
+                        // 1. Visit Merchant Button (Primary)
+                        if (currentOffer.merchantUrl.isNotEmpty()) {
+                            Button(
+                                onClick = {
+                                    com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = false)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = neonColor),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Visit ${currentOffer.merchant}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White // Always white on Primary/Neon button
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.OpenInNew,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // 2. View Offer Source (Secondary)
+                        if (currentOffer.offerSourceUrl.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = {
+                                    com.offerlens.data.affiliate.AffiliateManager.openOfferLink(context, currentOffer, useSourceUrl = true)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "View Offer Source (e.g. Bank Page)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Link,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }
