@@ -27,9 +27,18 @@ class SmartWalletRepository @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val MY_CARDS_KEY = stringSetPreferencesKey("my_cards")
+    private val FILTER_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("smart_filter_enabled")
 
     private val _myCards = MutableStateFlow<Set<String>>(emptySet())
     val myCards: StateFlow<Set<String>> = _myCards.asStateFlow()
+
+    /**
+     * Whether the Smart Wallet filter is switched on. Persisted alongside the card
+     * selection - previously this lived only in the ViewModel, so the selected cards
+     * survived a restart but the filter silently switched itself off every launch.
+     */
+    private val _isFilterEnabled = MutableStateFlow(false)
+    val isFilterEnabled: StateFlow<Boolean> = _isFilterEnabled.asStateFlow()
 
     companion object {
         // Predefined List of Banks/Cards supported
@@ -51,10 +60,18 @@ class SmartWalletRepository @Inject constructor(
 
     init {
         scope.launch {
-            val cached = context.walletDataStore.data.map { prefs ->
-                prefs[MY_CARDS_KEY] ?: emptySet()
-            }.first()
-            _myCards.value = cached
+            val prefs = context.walletDataStore.data.first()
+            _myCards.value = prefs[MY_CARDS_KEY] ?: emptySet()
+            _isFilterEnabled.value = prefs[FILTER_ENABLED_KEY] ?: false
+        }
+    }
+
+    fun setFilterEnabled(enabled: Boolean) {
+        _isFilterEnabled.value = enabled
+        scope.launch {
+            context.walletDataStore.edit { prefs ->
+                prefs[FILTER_ENABLED_KEY] = enabled
+            }
         }
     }
 

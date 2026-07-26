@@ -351,7 +351,8 @@ fun OfferDetailsScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(64.dp)
+                            // Minimum rather than fixed, so a two-line code isn't clipped.
+                            .heightIn(min = 64.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
@@ -361,7 +362,7 @@ fun OfferDetailsScreen(
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Code copied!", Toast.LENGTH_SHORT).show()
                             }
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(
@@ -369,13 +370,23 @@ fun OfferDetailsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // This is the screen users come to in order to READ the code, so
+                            // it must never be cut off. Long codes step down in size and drop
+                            // the letter spacing rather than ellipsising, and may wrap to a
+                            // second line.
+                            val code = currentOffer.couponCode.trim()
+                            val codeStyle = when {
+                                code.length <= 14 -> Triple(20.sp, 2.sp, 1)
+                                code.length <= 22 -> Triple(16.sp, 1.sp, 1)
+                                else -> Triple(14.sp, 0.sp, 2)
+                            }
                             Text(
-                                text = currentOffer.couponCode.trim(),
-                                fontSize = 20.sp,
+                                text = code,
+                                fontSize = codeStyle.first,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                letterSpacing = 2.sp,
-                                maxLines = 1,
+                                letterSpacing = codeStyle.second,
+                                maxLines = codeStyle.third,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )

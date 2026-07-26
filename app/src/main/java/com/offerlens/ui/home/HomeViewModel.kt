@@ -37,9 +37,8 @@ class HomeViewModel @Inject constructor(
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
     
-    // Smart Wallet Toggle State
-    private val _smartWalletEnabled = MutableStateFlow(false)
-    val smartWalletEnabled: StateFlow<Boolean> = _smartWalletEnabled.asStateFlow()
+    // Smart Wallet toggle - backed by the repository so it survives app restarts.
+    val smartWalletEnabled: StateFlow<Boolean> = smartWalletRepository.isFilterEnabled
     
     // Expose Premium Status for UI
     val isPremium = premiumRepository.isPremium
@@ -64,7 +63,7 @@ class HomeViewModel @Inject constructor(
         _searchQuery,
         smartWalletRepository.myCards,
         premiumRepository.isPremium,
-        _smartWalletEnabled
+        smartWalletRepository.isFilterEnabled
     ) { offers, query, myCards, isPremium, isWalletEnabled ->
         var result = offers
         
@@ -189,7 +188,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun toggleSmartWallet() {
-        _smartWalletEnabled.value = !_smartWalletEnabled.value
+        smartWalletRepository.setFilterEnabled(!smartWalletEnabled.value)
     }
 
     fun refreshOffers() {
