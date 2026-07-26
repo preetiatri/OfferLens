@@ -223,6 +223,19 @@ fun NeonOfferCard(
                         fontWeight = FontWeight.Bold,
                         color = neonColor
                     )
+                    // Show the cap on "X% off up to Rs Y" offers so the headline
+                    // discount isn't misleading at a glance.
+                    offer.maxDiscountAmount?.let { cap ->
+                        if (cap > 0) {
+                            val capText = if (cap % 1.0 == 0.0) cap.toInt().toString() else cap.toString()
+                            Text(
+                                text = "up to ₹$capText",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Gray
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = offer.description.take(50) + if (offer.description.length > 50) "..." else "",

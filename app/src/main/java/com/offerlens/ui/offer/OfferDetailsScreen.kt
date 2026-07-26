@@ -241,6 +241,19 @@ fun OfferDetailsScreen(
                             fontWeight = FontWeight.Bold,
                             color = neonColor
                         )
+                        // Most bank offers are "X% off up to Rs Y" - without the cap the
+                        // headline overstates what the user actually saves.
+                        currentOffer.maxDiscountAmount?.let { cap ->
+                            if (cap > 0) {
+                                val capText = if (cap % 1.0 == 0.0) cap.toInt().toString() else cap.toString()
+                                Text(
+                                    text = "up to ₹$capText",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = currentOffer.description,

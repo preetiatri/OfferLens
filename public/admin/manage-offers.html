@@ -429,6 +429,14 @@
                             <input type="number" id="m_discountValue" required>
                         </div>
                         <div>
+                            <label>Max Discount (₹) — optional</label>
+                            <input type="number" id="m_maxDiscount" placeholder="e.g. 5000">
+                            <small style="color: var(--text-dim); display:block; margin-top:4px;">
+                                For "X% off up to ₹Y" offers, put Y here. Leave blank if the
+                                discount has no cap.
+                            </small>
+                        </div>
+                        <div>
                             <label>Min Order (₹)</label>
                             <input type="number" id="m_minOrder" value="0">
                         </div>
@@ -754,6 +762,11 @@
                 paymentType: document.getElementById('m_paymentType').value,
                 discountType: document.getElementById('m_discountType').value,
                 discountValue: parseFloat(document.getElementById('m_discountValue').value),
+                // null (not 0) when blank - the app treats null as "no cap" and skips
+                // the "up to Rs X" line entirely.
+                maxDiscountAmount: document.getElementById('m_maxDiscount').value
+                    ? parseFloat(document.getElementById('m_maxDiscount').value)
+                    : null,
                 minOrderValue: parseFloat(document.getElementById('m_minOrder').value),
                 description: document.getElementById('m_description').value,
                 termsAndConditions: document.getElementById('m_tnc').value,
@@ -848,6 +861,10 @@
                     paymentType: item['Payment Type'] || 'Credit Card',
                     discountType: dtype,
                     discountValue: parseFloat(item['Discount Value']) || 0,
+                    // Optional "Max Discount" column for "X% off up to Rs Y" offers.
+                    // Deliberately null rather than 0 when absent, so the app can tell
+                    // "no cap" apart from "capped at zero".
+                    maxDiscountAmount: parseFloat(item['Max Discount']) || null,
                     minOrderValue: parseFloat(item['Min Order']) || 0,
                     description: item['Description'] || '',
                     termsAndConditions: item['Terms & C'] || '',
