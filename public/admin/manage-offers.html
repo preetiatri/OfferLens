@@ -356,10 +356,10 @@
         </header>
 
         <nav class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('list', event)">Manage Offers</button>
-            <button class="tab-btn" onclick="switchTab('manual', event)">Add Manual</button>
-            <button class="tab-btn" onclick="switchTab('bulk', event)">Bulk Upload</button>
-            <button class="tab-btn" onclick="switchTab('affiliate', event)">Affiliation</button>
+            <button class="tab-btn active" data-tab="list" onclick="switchTab('list')">Manage Offers</button>
+            <button class="tab-btn" data-tab="manual" onclick="switchTab('manual')">Add Manual</button>
+            <button class="tab-btn" data-tab="bulk" onclick="switchTab('bulk')">Bulk Upload</button>
+            <button class="tab-btn" data-tab="affiliate" onclick="switchTab('affiliate')">Affiliation</button>
         </nav>
 
         <!-- View: Offer List -->
@@ -393,7 +393,11 @@
             </div>
 
             <div class="card">
-                <h2 style="margin-bottom: 24px;">New Manual Offer</h2>
+                <div id="editBanner" style="display:none; margin-bottom:20px; padding:12px 16px; border-radius:10px; background:rgba(0,245,255,0.12); border:1px solid rgba(0,245,255,0.3); align-items:center; justify-content:space-between; gap:12px;">
+                    <span style="font-size:14px;">Editing <strong id="editBannerName"></strong> — saving will update this offer, not create a new one.</span>
+                    <button type="button" class="btn btn-outline" style="white-space:nowrap;" onclick="window.cancelEdit()">Cancel edit</button>
+                </div>
+                <h2 id="manualFormHeading" style="margin-bottom: 24px;">New Manual Offer</h2>
                 <form id="manualOfferForm">
                     <div class="form-grid">
                         <div>
@@ -674,6 +678,10 @@
             // silently produced offers carrying another merchant's coupon code and
             // minimum order. Merchant is left alone: the parser never sets it, the admin
             // types it, and it's listed under "check manually" on every parse.
+            // Parsing a fresh paste means a new offer. Staying in edit mode would
+            // overwrite the offer being edited with the pasted one's details.
+            if (editingOfferId) setEditMode(null);
+
             ['m_discountValue', 'm_maxDiscount', 'm_minOrder', 'm_paymentType',
              'm_coupon', 'm_endDate', 'm_description', 'm_bankName_other', 'm_sourceUrl'
             ].forEach(id => { document.getElementById(id).value = ''; });
@@ -967,6 +975,100 @@
             document.getElementById('tierRows').innerHTML = '';
         }
 
+        // ---------- EDIT MODE ----------
+        // null = creating a new offer; a document id = updating that offer.
+        let editingOfferId = null;
+
+        function setEditMode(offer) {
+            editingOfferId = offer ? offer.id : null;
+            const banner = document.getElementById('editBanner');
+            const heading = document.getElementById('manualFormHeading');
+            const submitBtn = document.getElementById('m_submitBtn');
+            if (offer) {
+                document.getElementById('editBannerName').textContent = offer.merchant || '(unnamed offer)';
+                banner.style.display = 'flex';
+                heading.textContent = 'Edit Offer';
+                submitBtn.textContent = 'Update Offer';
+            } else {
+                banner.style.display = 'none';
+                heading.textContent = 'New Manual Offer';
+                submitBtn.textContent = 'Save to Firebase';
+            }
+        }
+
+        window.cancelEdit = function () {
+            document.getElementById('manualOfferForm').reset();
+            document.getElementById('m_bankName_other').style.display = 'none';
+            clearTiers();
+            document.getElementById('m_status').innerHTML = '';
+            setEditMode(null);
+        };
+
+        // Firestore Timestamps come back as objects with toDate(); the date input needs
+        // a plain YYYY-MM-DD string in local time.
+        function timestampToDateInput(ts) {
+            if (!ts) return '';
+            try {
+                const d = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+                if (isNaN(d)) return '';
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            } catch (e) {
+                return '';
+            }
+        }
+
+        window.editOffer = function (id) {
+            const offer = allOffers.find(o => o.id === id);
+            if (!offer) {
+                showToast('Could not find that offer - try Refresh.', true);
+                return;
+            }
+
+            document.getElementById('m_merchant').value = offer.merchant || '';
+            document.getElementById('m_category').value = offer.category || 'Shopping';
+            document.getElementById('m_paymentType').value = offer.paymentType || '';
+            document.getElementById('m_discountType').value = offer.discountType || 'Percentage';
+            document.getElementById('m_discountValue').value = offer.discountValue ?? '';
+            document.getElementById('m_maxDiscount').value = offer.maxDiscountAmount ?? '';
+            // Guard against NaN, which older saves could write before that bug was fixed.
+            const minVal = offer.minOrderValue;
+            document.getElementById('m_minOrder').value =
+                (typeof minVal === 'number' && !isNaN(minVal)) ? minVal : '';
+            document.getElementById('m_description').value = offer.description || '';
+            document.getElementById('m_tnc').value = offer.termsAndConditions || '';
+            document.getElementById('m_coupon').value = offer.couponCode || '';
+            document.getElementById('m_couponOnSite').checked = !!offer.couponRevealedOnSite;
+            document.getElementById('m_url').value = offer.merchantUrl || '';
+            document.getElementById('m_sourceUrl').value = offer.offerSourceUrl || '';
+            document.getElementById('m_endDate').value = timestampToDateInput(offer.endDate);
+
+            // Bank may be a name outside the supported list (a UPI wallet, say), in which
+            // case it belongs in the "Other" free-text box.
+            const bankSelect = document.getElementById('m_bankName_select');
+            const bankOther = document.getElementById('m_bankName_other');
+            if (offer.bankName && SUPPORTED_BANKS.includes(offer.bankName)) {
+                bankSelect.value = offer.bankName;
+                bankOther.value = '';
+                bankOther.style.display = 'none';
+            } else if (offer.bankName) {
+                bankSelect.value = '__other__';
+                bankOther.value = offer.bankName;
+                bankOther.style.display = 'block';
+            } else {
+                bankSelect.value = '';
+                bankOther.style.display = 'none';
+            }
+
+            clearTiers();
+            (offer.tiers || []).forEach(t => window.addTierRow(t));
+
+            setEditMode(offer);
+            window.switchTab('manual');
+            document.getElementById('m_status').innerHTML = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
         // ---------- T&C GENERATOR ----------
         // Composes a summary from the facts already entered on the form, plus OfferLens's
         // own standard disclaimer. Deliberately does NOT reproduce the bank's wording:
@@ -1095,11 +1197,14 @@
         window.doSignOut = () => signOut(auth);
 
         // Tab Switching
-        window.switchTab = function(tabId, evt) {
+        // Resolves the tab button from data-tab rather than the click event, so this can
+        // also be called programmatically (e.g. jumping to the form when editing).
+        window.switchTab = function(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
 
-            (evt || window.event).target.classList.add('active');
+            const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+            if (btn) btn.classList.add('active');
             document.getElementById('tab-' + tabId).classList.add('active');
         };
 
@@ -1163,6 +1268,7 @@
                                 ? `<button class="btn btn-outline" onclick="window.toggleOffer('${safeId}', false, this)">Deactivate</button>`
                                 : `<button class="btn btn-primary" onclick="window.toggleOffer('${safeId}', true, this)">Activate</button>`
                             }
+                            <button class="btn btn-outline" onclick="window.editOffer('${safeId}')">Edit</button>
                             <button class="btn btn-danger" onclick="window.deleteOffer('${safeId}', this)">Delete</button>
                         </div>
                     </div>
@@ -1274,22 +1380,37 @@
                 couponRevealedOnSite: document.getElementById('m_couponOnSite').checked,
                 merchantUrl: document.getElementById('m_url').value,
                 offerSourceUrl: document.getElementById('m_sourceUrl').value,
-                isActive: true,
-                createdAt: serverTimestamp(),
                 endDate: document.getElementById('m_endDate').value ? Timestamp.fromDate(new Date(document.getElementById('m_endDate').value)) : null
             };
 
             try {
-                await addDoc(collection(db, 'offers'), data);
-                status.innerHTML = '<span style="color:var(--success)">✅ Successfully Synchronized!</span>';
+                if (editingOfferId) {
+                    // Deliberately omits createdAt (it would reset the offer's age and
+                    // reorder the list) and isActive (so editing doesn't silently
+                    // reactivate an offer the admin had deactivated).
+                    await updateDoc(doc(db, 'offers', editingOfferId), {
+                        ...data,
+                        updatedAt: serverTimestamp()
+                    });
+                    status.innerHTML = '<span style="color:var(--success)">✅ Offer updated!</span>';
+                    setEditMode(null);
+                } else {
+                    await addDoc(collection(db, 'offers'), {
+                        ...data,
+                        isActive: true,
+                        createdAt: serverTimestamp()
+                    });
+                    status.innerHTML = '<span style="color:var(--success)">✅ Successfully Synchronized!</span>';
+                }
                 e.target.reset();
                 document.getElementById('m_bankName_other').style.display = 'none';
                 clearTiers(); // reset() doesn't touch dynamically added rows
-                window.loadOffers(); // refresh the list tab so the new offer shows up
+                window.loadOffers(); // refresh the list tab so the change shows up
             } catch (err) {
                 status.innerHTML = '<span style="color:var(--error)">❌ Error: ' + err.message + '</span>';
             } finally {
-                btn.disabled = false; btn.textContent = 'Save to Firebase';
+                btn.disabled = false;
+                btn.textContent = editingOfferId ? 'Update Offer' : 'Save to Firebase';
             }
         });
 
