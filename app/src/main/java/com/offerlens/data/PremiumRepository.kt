@@ -57,6 +57,19 @@ class PremiumRepository @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val PREMIUIM_KEY = booleanPreferencesKey("is_premium")
+    private val DEBUG_PREMIUM_KEY = booleanPreferencesKey("debug_premium_override")
+
+    /**
+     * Debug-only sticky premium grant.
+     *
+     * The debug bypass in launchPurchaseFlow() sets premium directly, but
+     * checkPurchases() runs afterwards - from the billing connection and again from the
+     * Firestore user-doc listener - finds no real Play purchase, and would immediately
+     * set it back to false. The grant appeared to work and then silently vanished a
+     * moment later, taking the Smart Wallet toggle with it. This flag makes the debug
+     * grant survive those checks. It is never set in release builds.
+     */
+    private var debugPremiumOverride = false
 
     private val billingClient = BillingClient.newBuilder(context)
         .setListener(this)
@@ -71,9 +84,11 @@ class PremiumRepository @Inject constructor(
     init {
         // Load initial state from cache
         scope.launch {
-            val cachedPremium = context.dataStore.data.map { prefs ->
-                prefs[PREMIUIM_KEY] ?: false
-            }.first()
+            val prefs = context.dataStore.data.first()
+            if (com.offerlens.BuildConfig.DEBUG) {
+                debugPremiumOverride = prefs[DEBUG_PREMIUM_KEY] ?: false
+            }
+            val cachedPremium = (prefs[PREMIUIM_KEY] ?: false) || debugPremiumOverride
             _isPremium.value = cachedPremium
 
             // Then check online
@@ -253,10 +268,13 @@ class PremiumRepository @Inject constructor(
 
 
     private fun updatePremiumStatus(status: Boolean) {
-        _isPremium.value = status
+        // A debug grant wins over a negative billing result, so the periodic purchase
+        // checks can't revoke it mid-session.
+        val effective = status || debugPremiumOverride
+        _isPremium.value = effective
         scope.launch {
             context.dataStore.edit { prefs ->
-                prefs[PREMIUIM_KEY] = status
+                prefs[PREMIUIM_KEY] = effective
             }
         }
     }
@@ -266,6 +284,10 @@ class PremiumRepository @Inject constructor(
         // DEBUG BYPASS: Instantly grant premium in Debug builds
         if (com.offerlens.BuildConfig.DEBUG) {
             Timber.d("DEBUG MODE: Granting premium instantly without Play Store.")
+            debugPremiumOverride = true
+            scope.launch {
+                context.dataStore.edit { prefs -> prefs[DEBUG_PREMIUM_KEY] = true }
+            }
             updatePremiumStatus(true)
             syncPremiumToFirestore()
             withContext(Dispatchers.Main) {
