@@ -126,13 +126,18 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
+            // Height derives from the list so the grid can't clip when issuers are added.
+            // (Fixed height is required here: a lazy grid can't measure itself inside a
+            // scrollable Column.) rows * chip height + (rows - 1) * spacing.
+            val bankRows = (banks.size + 1) / 2
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
+                userScrollEnabled = false,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(328.dp)
+                    .height((bankRows * 48 + (bankRows - 1) * 8).dp)
             ) {
                 items(banks) { bank ->
                     SelectableChip(

@@ -49,14 +49,19 @@ class SmartWalletRepository @Inject constructor(
          */
         private val GENERIC_ISSUER_WORDS = setOf(
             "bank", "banks", "card", "cards", "credit", "debit", "pay",
-            "ltd", "limited", "india", "the", "and"
+            "ltd", "limited", "india", "the", "and", "of", "upi", "wallet",
+            // "Small Finance Bank" is a licence category shared by several issuers
+            // (AU, Equitas, Ujjivan...) - matching on it would cross-match them.
+            "small", "finance"
         )
 
         private fun distinctiveTokens(name: String): List<String> =
             name.lowercase().trim()
                 .split(' ', '-', '/', '.', ',')
                 .map { it.trim() }
-                .filter { it.length > 2 && it !in GENERIC_ISSUER_WORDS }
+                // >= 2 rather than > 2 so genuine short issuer tokens like "AU"
+                // survive; two-letter filler ("of") is caught by the generic list.
+                .filter { it.length >= 2 && it !in GENERIC_ISSUER_WORDS }
 
         /**
          * Whether an offer's bank name refers to the same issuer as a card the user holds.
@@ -80,20 +85,42 @@ class SmartWalletRepository @Inject constructor(
             }
         }
 
-        // Predefined List of Banks/Cards supported
+        // Supported issuers. MUST stay in sync with SUPPORTED_BANKS in
+        // public/admin/manage-offers.html - offers are tagged from that list, and
+        // Smart Wallet matching depends on the names agreeing.
         val supportedBanks = listOf(
+            // Banks & card issuers
             "HDFC Bank",
             "SBI Card",
             "ICICI Bank",
             "Axis Bank",
             "Kotak Mahindra",
-            "Citibank",
-            "American Express",
-            "Standard Chartered",
-            "RBL Bank",
+            "AU Bank",
+            "IDFC First Bank",
+            "Yes Bank",
             "IndusInd Bank",
+            "RBL Bank",
+            "Federal Bank",
+            "Bank of Baroda",
+            "Punjab National Bank",
+            "Canara Bank",
+            "Union Bank of India",
+            "IDBI Bank",
+            "Citibank",
+            "HSBC",
+            "Standard Chartered",
+            "American Express",
             "OneCard",
-            "Amazon Pay"
+            "Slice",
+            // UPI apps & wallets
+            "Paytm",
+            "PhonePe",
+            "Google Pay",
+            "Amazon Pay",
+            "CRED",
+            "Mobikwik",
+            "Freecharge",
+            "BHIM UPI"
         )
     }
 
