@@ -73,11 +73,10 @@ android {
             configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
                 mappingFileUploadEnabled = false
             }
-            // Production AdMob ID
+            // Production AdMob IDs (live units - real impressions, never use in testing)
             buildConfigField("String", "ADMOB_APP_ID", "\"ca-app-pub-7195572820017273~2445725500\"")
-            // Placeholders - REPLACE WITH REAL IDs
-            buildConfigField("String", "ADMOB_BANNER_ID", "\"INSERT_RELEASE_BANNER_ID\"")
-            buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"INSERT_RELEASE_INTERSTITIAL_ID\"")
+            buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-7195572820017273/2148159917\"")
+            buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"ca-app-pub-7195572820017273/5986232492\"")
             
             // Affiliate Keys
             buildConfigField("String", "AFFILIATE_CUELINKS_KEY", "\"INSERT_CUELINKS_KEY_HERE\"")
