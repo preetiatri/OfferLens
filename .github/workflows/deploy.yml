@@ -29,12 +29,39 @@ jobs:
           ENCODED_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
           ENCODED_GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          echo $ENCODED_KEYSTORE | base64 --decode > app/keystore.jks
-          echo $ENCODED_GOOGLE_SERVICES | base64 --decode > app/google-services.json
+          # NOTE: the variables MUST be quoted. Unquoted "echo $VAR" word-splits on
+          # newlines, which silently corrupts a line-wrapped base64 secret.
+          echo "$ENCODED_KEYSTORE" | base64 --decode > app/keystore.jks
+          echo "$ENCODED_GOOGLE_SERVICES" | base64 --decode > app/google-services.json
           echo "storeFile=keystore.jks" > keystore.properties
           echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> keystore.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> keystore.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
+
+      # Fails fast with a clear message instead of a cryptic DER parse error at the
+      # signing step 3 minutes into the build. Prints no key material or passwords -
+      # only the file's size and format magic bytes.
+      - name: Verify decoded signing inputs
+        run: |
+          echo "keystore.jks size: $(stat -c%s app/keystore.jks) bytes (expected ~2558)"
+          echo "keystore.jks magic: $(head -c 4 app/keystore.jks | xxd -p)  (expected 308209fa for PKCS12)"
+          if head -c 4 app/keystore.jks | xxd -p | grep -qi '^3082'; then
+            echo "OK: keystore looks like a valid PKCS12/DER file."
+          elif head -c 4 app/keystore.jks | xxd -p | grep -qi '^feedfeed'; then
+            echo "OK: keystore looks like a valid JKS file."
+          else
+            echo "ERROR: app/keystore.jks is NOT a valid keystore - the KEYSTORE_BASE64 secret"
+            echo "       is malformed or was encoded from the wrong file. Re-create it (see README)."
+            exit 1
+          fi
+          if [ -z "${{ secrets.KEY_ALIAS }}" ]; then
+            echo "ERROR: the KEY_ALIAS secret is empty. It must match the alias inside the keystore."
+            exit 1
+          fi
+          echo "google-services.json size: $(stat -c%s app/google-services.json) bytes"
+          head -c 1 app/google-services.json | grep -q '{' \
+            && echo "OK: google-services.json starts with '{'." \
+            || { echo "ERROR: google-services.json is not valid JSON - check GOOGLE_SERVICES_JSON_BASE64."; exit 1; }
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
