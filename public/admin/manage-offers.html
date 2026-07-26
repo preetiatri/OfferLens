@@ -656,7 +656,12 @@
             const pct = text.match(/(\d+(?:\.\d+)?)\s*%/);
             const capM = text.match(new RegExp("(?:up\\s*to|upto|max(?:imum)?\\.?)\\s*(?:discount\\s*(?:of)?\\s*)?" + MONEY, "i"));
             const flatM = text.match(new RegExp("(?:flat\\s*)?" + MONEY + "\\s*(?:off|discount|cashback)", "i"));
-            const isCashback = /cashback/i.test(text);
+            // Only treat this as a cashback offer if the word sits next to an amount.
+            // A bare mention is usually UI copy ("click the Cashback button", "get
+            // exciting cashback/reward") on pages whose actual offer is a discount.
+            const isCashback =
+                new RegExp("(?:\\d+\\s*%|" + MONEY + ")\\s*(?:instant\\s*)?cash\\s?back", "i").test(text) ||
+                new RegExp("cash\\s?back\\s*(?:of\\s*)?(?:up\\s*to\\s*)?(?:\\d+\\s*%|" + MONEY + ")", "i").test(text);
 
             let dType = null, dValue = null, dCap = null;
             if (pct) {
@@ -671,6 +676,13 @@
                 dType = isCashback ? 'Cashback' : 'Flat';
                 dValue = num(flatM[1]);
             }
+
+            // Bank pages often bundle several sub-offers under one listing (e.g. separate
+            // caps for domestic flights / international flights / hotels / bus). One
+            // record can't represent that, so flag it rather than silently picking one.
+            const allCaps = [...text.matchAll(new RegExp("(?:up\\s*to|upto|max(?:imum)?\\.?)\\s*(?:discount\\s*(?:of)?\\s*)?" + MONEY, "gi"))]
+                .map(m => num(m[1]));
+            const distinctCaps = [...new Set(allCaps)];
 
             if (dType) {
                 document.getElementById('m_discountType').value = dType;
@@ -767,7 +779,18 @@
             html += '<div style="color:#FFC107; font-weight:600; margin:12px 0 8px;">Enter or check manually:</div>' +
                 '<ul style="margin-left:18px; font-size:13px; color:var(--text-dim);">' +
                 missing.map(m => '<li>' + escapeHtml(m) + '</li>').join('') +
-                '</ul>' +
+                '</ul>';
+
+            if (distinctCaps.length > 1) {
+                html += '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(255,82,82,0.12); color:var(--error); font-size:13px;">' +
+                    '<strong>This looks like several offers in one listing.</strong> Found ' + distinctCaps.length +
+                    ' different maximum amounts (₹' + distinctCaps.join(', ₹') + '), which usually means separate ' +
+                    'terms per product — e.g. different caps for flights, hotels and bus. Only ₹' + escapeHtml(String(dValue)) +
+                    ' was filled in. Consider saving one offer per product type so users see the terms that actually apply to them.' +
+                    '</div>';
+            }
+
+            html +=
                 '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(255,193,7,0.12); color:#FFC107; font-size:13px;">' +
                 'Terms &amp; Conditions is intentionally left blank. Write a short summary in your own words rather than ' +
                 'pasting the bank\'s text — their wording is their copyright, and a concise summary reads better in the app.' +
