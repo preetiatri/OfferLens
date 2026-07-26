@@ -3,6 +3,24 @@ package com.offerlens.data
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.PropertyName
 
+/**
+ * One row of a multi-tier offer.
+ *
+ * Bank offers are frequently bundled: a single listing might give a different cap and
+ * minimum spend for domestic flights, international flights, hotels and bus. Flattening
+ * that into one discount value forces a choice between overstating the benefit or
+ * hiding the terms that actually apply, so each variant is kept as its own tier.
+ *
+ * All fields need defaults - Firestore requires a no-arg constructor to deserialize.
+ */
+data class OfferTier(
+    val label: String = "",                    // e.g. "International Flights"
+    val discountValue: Double = 0.0,
+    val maxDiscountAmount: Double? = null,     // cap for this tier
+    val minOrderValue: Double? = null,         // minimum spend for this tier
+    val note: String = ""                      // e.g. "Rs 1000 per passenger"
+)
+
 data class Offer(
     val id: String = "",
     val bankName: String = "",
@@ -12,6 +30,11 @@ data class Offer(
     val discountValue: Double = 0.0,
     val maxDiscountAmount: Double? = null,
     val minOrderValue: Double? = null,
+    /**
+     * Per-product breakdown for bundled offers. Empty for ordinary single-tier offers,
+     * in which case the top-level discount fields above are the whole story.
+     */
+    val tiers: List<OfferTier> = emptyList(),
     val startDate: Timestamp? = null,
     val endDate: Timestamp? = null,
     @get:PropertyName("isActive") @set:PropertyName("isActive") var isActive: Boolean = true,

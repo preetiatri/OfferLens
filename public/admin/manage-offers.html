@@ -463,6 +463,16 @@
                             <input type="text" id="m_description" required placeholder="Short catchphrase for the offer">
                         </div>
                         <div class="full-width">
+                            <label>Offer Breakdown — optional</label>
+                            <small style="color: var(--text-dim); display:block; margin-bottom:10px;">
+                                Only for bundled offers where the cap or minimum spend differs per product
+                                (e.g. separate terms for flights, hotels and bus). Leave empty for ordinary
+                                single-tier offers — the app then just uses the discount fields above.
+                            </small>
+                            <div id="tierRows"></div>
+                            <button type="button" class="btn btn-outline" onclick="window.addTierRow()" style="margin-top:4px;">+ Add product tier</button>
+                        </div>
+                        <div class="full-width">
                             <label>Terms & Conditions</label>
                             <textarea id="m_tnc" rows="4"></textarea>
                         </div>
@@ -684,6 +694,42 @@
                 .map(m => num(m[1]));
             const distinctCaps = [...new Set(allCaps)];
 
+            // Try to read the per-product breakdown these listings usually spell out
+            // line by line, e.g.:
+            //   "Hotel booking : Instant Discount of up to INR 700 on min order of INR 4500"
+            // Parsed per original line so each tier keeps its own label and minimum,
+            // instead of amounts from different products getting mixed together.
+            const tiersDetected = [];
+            rawInput.split(/\r?\n/).forEach(line => {
+                const l = line.trim();
+                if (!l) return;
+                const capOnLine = l.match(new RegExp("(?:up\\s*to|upto|max(?:imum)?\\.?)\\s*(?:discount\\s*(?:of)?\\s*)?" + MONEY, "i"));
+                if (!capOnLine) return;
+                // Label = the text before the first colon or the discount wording.
+                let label = l.split(/[:–—-]/)[0].trim();
+                if (!label || label.length > 45) {
+                    const m = l.match(/^(.{2,45}?)\s*(?:booking|purchase|transaction|orders?)\b/i);
+                    label = m ? m[1].trim() : '';
+                }
+                if (!label) return;
+                const minOnLine = l.match(new RegExp("min(?:imum)?\\.?\\s*(?:order|purchase|transaction|spend|booking|cart)?\\s*(?:value|amount|of)?\\s*(?:of\\s*)?" + MONEY, "i"));
+                const perUnit = l.match(new RegExp(MONEY + "\\s*per\\s*([a-z]+)", "i"));
+                tiersDetected.push({
+                    label: label,
+                    maxDiscountAmount: num(capOnLine[1]),
+                    minOrderValue: minOnLine ? num(minOnLine[1]) : null,
+                    note: perUnit ? ('₹' + num(perUnit[1]) + ' per ' + perUnit[2]) : ''
+                });
+            });
+
+            // Reset unconditionally: parsing a simple offer after a multi-tier one must
+            // not leave the previous offer's tiers attached to it.
+            clearTiers();
+            if (tiersDetected.length > 1) {
+                tiersDetected.forEach(t => window.addTierRow(t));
+                found.push(['Product tiers', tiersDetected.length + ' detected']);
+            }
+
             if (dType) {
                 document.getElementById('m_discountType').value = dType;
                 document.getElementById('m_discountValue').value = dValue;
@@ -781,12 +827,18 @@
                 missing.map(m => '<li>' + escapeHtml(m) + '</li>').join('') +
                 '</ul>';
 
-            if (distinctCaps.length > 1) {
+            if (tiersDetected.length > 1) {
+                html += '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(0,255,136,0.12); color:var(--success); font-size:13px;">' +
+                    '<strong>Detected ' + tiersDetected.length + ' product tiers</strong> and filled them into the Offer ' +
+                    'Breakdown below: ' + escapeHtml(tiersDetected.map(t => t.label).join(', ')) + '. ' +
+                    'Check the labels and amounts, then save as a single offer — users will see the full breakdown.' +
+                    '</div>';
+            } else if (distinctCaps.length > 1) {
                 html += '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(255,82,82,0.12); color:var(--error); font-size:13px;">' +
                     '<strong>This looks like several offers in one listing.</strong> Found ' + distinctCaps.length +
-                    ' different maximum amounts (₹' + distinctCaps.join(', ₹') + '), which usually means separate ' +
-                    'terms per product — e.g. different caps for flights, hotels and bus. Only ₹' + escapeHtml(String(dValue)) +
-                    ' was filled in. Consider saving one offer per product type so users see the terms that actually apply to them.' +
+                    ' different maximum amounts (₹' + distinctCaps.join(', ₹') + '), but the per-product labels could not be ' +
+                    'read automatically. Only ₹' + escapeHtml(String(dValue)) + ' was filled in — add the rest by hand under ' +
+                    'Offer Breakdown, or save one offer per product type.' +
                     '</div>';
             }
 
@@ -799,6 +851,56 @@
 
             document.getElementById('m_merchant').focus();
         };
+
+        // ---------- OFFER TIERS ----------
+        // Repeatable rows for bundled offers (different cap / minimum per product).
+        let tierRowSeq = 0;
+        window.addTierRow = function (prefill) {
+            const id = ++tierRowSeq;
+            const row = document.createElement('div');
+            row.className = 'tier-row';
+            row.dataset.tierId = id;
+            row.style.cssText = 'display:grid; grid-template-columns: 1.6fr 1fr 1fr 1.4fr auto; gap:8px; align-items:start; margin-bottom:8px;';
+            row.innerHTML = `
+                <input type="text" class="tier-label" placeholder="Product (e.g. Hotels)">
+                <input type="number" class="tier-max" placeholder="Up to ₹">
+                <input type="number" class="tier-min" placeholder="Min ₹">
+                <input type="text" class="tier-note" placeholder="Note (optional)">
+                <button type="button" class="btn btn-danger" style="padding:12px 14px;" title="Remove this tier">&times;</button>
+            `;
+            row.querySelector('button').onclick = () => row.remove();
+            if (prefill) {
+                row.querySelector('.tier-label').value = prefill.label || '';
+                if (prefill.maxDiscountAmount != null) row.querySelector('.tier-max').value = prefill.maxDiscountAmount;
+                if (prefill.minOrderValue != null) row.querySelector('.tier-min').value = prefill.minOrderValue;
+                row.querySelector('.tier-note').value = prefill.note || '';
+            }
+            document.getElementById('tierRows').appendChild(row);
+            return row;
+        };
+
+        function collectTiers() {
+            return [...document.querySelectorAll('#tierRows .tier-row')].map(row => {
+                const label = row.querySelector('.tier-label').value.trim();
+                const max = row.querySelector('.tier-max').value;
+                const min = row.querySelector('.tier-min').value;
+                const note = row.querySelector('.tier-note').value.trim();
+                if (!label && !max && !min) return null; // skip blank rows
+                return {
+                    label: label,
+                    // discountValue mirrors the cap for these amount-based tiers; the app
+                    // falls back to it when no cap is set.
+                    discountValue: max ? parseFloat(max) : 0,
+                    maxDiscountAmount: max ? parseFloat(max) : null,
+                    minOrderValue: min ? parseFloat(min) : null,
+                    note: note
+                };
+            }).filter(Boolean);
+        }
+
+        function clearTiers() {
+            document.getElementById('tierRows').innerHTML = '';
+        }
 
         (function populateBankDropdown() {
             const select = document.getElementById('m_bankName_select');
@@ -1010,6 +1112,9 @@
                     ? parseFloat(document.getElementById('m_maxDiscount').value)
                     : null,
                 minOrderValue: parseFloat(document.getElementById('m_minOrder').value),
+                // Empty array for ordinary offers - the app then relies on the top-level
+                // discount fields and shows no breakdown section.
+                tiers: collectTiers(),
                 description: document.getElementById('m_description').value,
                 termsAndConditions: document.getElementById('m_tnc').value,
                 couponCode: document.getElementById('m_coupon').value,
@@ -1024,6 +1129,7 @@
                 status.innerHTML = '<span style="color:var(--success)">✅ Successfully Synchronized!</span>';
                 e.target.reset();
                 document.getElementById('m_bankName_other').style.display = 'none';
+                clearTiers(); // reset() doesn't touch dynamically added rows
                 window.loadOffers(); // refresh the list tab so the new offer shows up
             } catch (err) {
                 status.innerHTML = '<span style="color:var(--error)">❌ Error: ' + err.message + '</span>';

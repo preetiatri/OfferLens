@@ -9,9 +9,12 @@ import androidx.room.RoomDatabase
  * Room database for OfferLens
  * Provides offline caching and faster data access
  */
+// v4 added OfferEntity.tiersJson. There is no migration because this database is a
+// disposable cache - fallbackToDestructiveMigration wipes it and the next sync refetches
+// from Firestore. No user data lives here.
 @Database(
     entities = [OfferEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

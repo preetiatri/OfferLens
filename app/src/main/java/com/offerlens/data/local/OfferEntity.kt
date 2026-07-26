@@ -28,6 +28,11 @@ data class OfferEntity(
     val discountValue: Double,
     val maxDiscountAmount: Double?,
     val minOrderValue: Double?,
+    /**
+     * Offer.tiers serialized as a JSON array. Stored as a string rather than via a Room
+     * TypeConverter to keep the dependency footprint at zero - org.json ships with Android.
+     */
+    val tiersJson: String,
     val startDateSeconds: Long?,
     val startDateNanos: Int?,
     val endDateSeconds: Long?,
@@ -59,6 +64,41 @@ data class OfferEntity(
     val cachedAt: Long = System.currentTimeMillis() // When this was cached locally
 )
 
+private fun List<com.offerlens.data.OfferTier>.tiersToJson(): String {
+    if (isEmpty()) return ""
+    val arr = org.json.JSONArray()
+    forEach { t ->
+        val o = org.json.JSONObject()
+        o.put("label", t.label)
+        o.put("discountValue", t.discountValue)
+        t.maxDiscountAmount?.let { o.put("maxDiscountAmount", it) }
+        t.minOrderValue?.let { o.put("minOrderValue", it) }
+        o.put("note", t.note)
+        arr.put(o)
+    }
+    return arr.toString()
+}
+
+private fun String.jsonToTiers(): List<com.offerlens.data.OfferTier> {
+    if (isBlank()) return emptyList()
+    return try {
+        val arr = org.json.JSONArray(this)
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            com.offerlens.data.OfferTier(
+                label = o.optString("label", ""),
+                discountValue = o.optDouble("discountValue", 0.0),
+                maxDiscountAmount = if (o.has("maxDiscountAmount")) o.optDouble("maxDiscountAmount") else null,
+                minOrderValue = if (o.has("minOrderValue")) o.optDouble("minOrderValue") else null,
+                note = o.optString("note", "")
+            )
+        }
+    } catch (e: Exception) {
+        // A malformed cache entry should degrade to "no tiers", never crash the list.
+        emptyList()
+    }
+}
+
 /**
  * Extension functions to convert between Offer and OfferEntity
  */
@@ -72,6 +112,7 @@ fun com.offerlens.data.Offer.toEntity(): OfferEntity {
         discountValue = discountValue,
         maxDiscountAmount = maxDiscountAmount,
         minOrderValue = minOrderValue,
+        tiersJson = tiers.tiersToJson(),
         startDateSeconds = startDate?.seconds,
         startDateNanos = startDate?.nanoseconds,
         endDateSeconds = endDate?.seconds,
@@ -113,7 +154,8 @@ fun OfferEntity.toOffer(): com.offerlens.data.Offer {
         discountValue = discountValue,
         maxDiscountAmount = maxDiscountAmount,
         minOrderValue = minOrderValue,
-        startDate = if (startDateSeconds != null && startDateNanos != null) 
+        tiers = tiersJson.jsonToTiers(),
+        startDate = if (startDateSeconds != null && startDateNanos != null)
             Timestamp(startDateSeconds, startDateNanos) else null,
         endDate = if (endDateSeconds != null && endDateNanos != null) 
             Timestamp(endDateSeconds, endDateNanos) else null,

@@ -266,6 +266,79 @@ fun OfferDetailsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Per-product breakdown for bundled offers. A headline like "up to Rs 5000"
+                // is misleading on its own when the cap and minimum spend differ per
+                // product, so show the tier that actually applies to the user's purchase.
+                if (currentOffer.tiers.isNotEmpty()) {
+                    Text(
+                        text = "WHAT YOU GET",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = neonColor.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        currentOffer.tiers.forEachIndexed { index, tier ->
+                            if (index > 0) {
+                                HorizontalDivider(
+                                    color = Color.Gray.copy(alpha = 0.2f),
+                                    modifier = Modifier.padding(vertical = 12.dp)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = tier.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    val conditions = buildList {
+                                        tier.minOrderValue?.let { if (it > 0) add("min order ₹${it.toInt()}") }
+                                        if (tier.note.isNotBlank()) add(tier.note)
+                                    }
+                                    if (conditions.isNotEmpty()) {
+                                        Text(
+                                            text = conditions.joinToString(" · "),
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = tier.maxDiscountAmount?.let { "up to ₹${it.toInt()}" }
+                                        ?: if (currentOffer.discountType.equals("Percentage", ignoreCase = true))
+                                            "${tier.discountValue.toInt()}%"
+                                        else "₹${tier.discountValue.toInt()}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = neonColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
                 // Coupon Code Section - Only show if not empty after trim
                 if (currentOffer.couponCode.trim().isNotEmpty()) {
                     Text(
