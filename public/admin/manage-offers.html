@@ -1006,7 +1006,7 @@
             if (coupon) {
                 cond.push(`Apply coupon code ${coupon} at checkout to avail this offer.`);
             } else if (document.getElementById('m_couponOnSite').checked) {
-                cond.push('A coupon code is required. It is displayed on the bank or merchant\'s site — copy it there and apply it at checkout.');
+                cond.push('A coupon code is required and is displayed on the bank or merchant\'s own site. You may need to verify your registered mobile number and card details there before the code is shown — this happens on their official site, never inside OfferLens.');
             }
             if (endDate) cond.push(`Offer valid until ${prettyDate(endDate)}.`);
             else cond.push('No end date was published for this offer. It may be withdrawn at any time.');

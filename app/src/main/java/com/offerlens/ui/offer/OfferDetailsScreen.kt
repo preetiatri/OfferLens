@@ -412,7 +412,16 @@ fun OfferDetailsScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "This offer needs a coupon code, which is shown on the bank or merchant's site. Copy it there and apply it at checkout.",
+                            // Sets expectations before the redirect: bank portals (e.g. Axis
+                            // Grab Deals) ask the user to verify their registered mobile and
+                            // card digits before revealing the code. Unexplained, that screen
+                            // looks like a scam and users abandon the offer. The closing line
+                            // is also an anti-phishing signal - OfferLens never asks for these,
+                            // so an app that does is easier to recognise as fake.
+                            text = "This offer needs a coupon code from the bank's site. You may be asked to " +
+                                "verify your registered mobile number and card details on the bank's official " +
+                                "page before the code is shown. That happens on the bank's own site — OfferLens " +
+                                "never asks for your card details.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
