@@ -81,20 +81,8 @@ class HomeViewModel @Inject constructor(
         if (isPremium && isWalletEnabled && myCards.isNotEmpty()) {
             result = result.filter { offer ->
                 if (offer.bankName.isBlank()) return@filter false
-                
-                val normalizedOfferBank = offer.bankName.lowercase().trim()
                 myCards.any { userCard ->
-                    val normalizedUserCard = userCard.lowercase().trim()
-                    // Exact match, or a shared word of length > 2 (e.g. "HDFC" in "HDFC Bank").
-                    // Note: this is intentionally permissive - "ICICI Bank" will also match an
-                    // offer tagged "ICICI Amazon Pay" since they share the "icici" word. That's
-                    // treated as a reasonable false-positive (still the same parent bank) rather
-                    // than hidden from the user; the admin panel's bank dropdown (manage-offers.html)
-                    // is what actually prevents false negatives from spelling drift (e.g. "SBI Card"
-                    // vs "State Bank of India") by constraining new offers to this exact bank list.
-                    normalizedOfferBank == normalizedUserCard ||
-                    normalizedOfferBank.split(" ").any { it.length > 2 && normalizedUserCard.contains(it) } ||
-                    normalizedUserCard.split(" ").any { it.length > 2 && normalizedOfferBank.contains(it) }
+                    com.offerlens.data.SmartWalletRepository.issuerMatches(offer.bankName, userCard)
                 }
             }
         }

@@ -41,6 +41,45 @@ class SmartWalletRepository @Inject constructor(
     val isFilterEnabled: StateFlow<Boolean> = _isFilterEnabled.asStateFlow()
 
     companion object {
+        /**
+         * Words that appear across many issuer names and therefore say nothing about
+         * which issuer this is. Matching on them made every bank match every other:
+         * "HDFC Bank" and "Axis Bank" share "bank", so selecting one card surfaced
+         * every bank's offers and the Smart Wallet filter appeared to do nothing.
+         */
+        private val GENERIC_ISSUER_WORDS = setOf(
+            "bank", "banks", "card", "cards", "credit", "debit", "pay",
+            "ltd", "limited", "india", "the", "and"
+        )
+
+        private fun distinctiveTokens(name: String): List<String> =
+            name.lowercase().trim()
+                .split(' ', '-', '/', '.', ',')
+                .map { it.trim() }
+                .filter { it.length > 2 && it !in GENERIC_ISSUER_WORDS }
+
+        /**
+         * Whether an offer's bank name refers to the same issuer as a card the user holds.
+         *
+         * Exact match first, then a comparison of distinctive tokens only, so
+         * "HDFC Bank" still matches an offer tagged "HDFC Credit Card" without also
+         * matching "Axis Bank".
+         */
+        fun issuerMatches(offerBankName: String, userCard: String): Boolean {
+            val offer = offerBankName.lowercase().trim()
+            val user = userCard.lowercase().trim()
+            if (offer.isBlank() || user.isBlank()) return false
+            if (offer == user) return true
+
+            val offerTokens = distinctiveTokens(offer)
+            val userTokens = distinctiveTokens(user)
+            if (offerTokens.isEmpty() || userTokens.isEmpty()) return false
+
+            return offerTokens.any { o ->
+                userTokens.any { u -> o == u || o.contains(u) || u.contains(o) }
+            }
+        }
+
         // Predefined List of Banks/Cards supported
         val supportedBanks = listOf(
             "HDFC Bank",
