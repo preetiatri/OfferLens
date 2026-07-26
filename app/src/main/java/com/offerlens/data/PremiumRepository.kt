@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import android.widget.Toast
 
@@ -324,35 +325,45 @@ class PremiumRepository @Inject constructor(
         }
     }
 
-    suspend fun restorePurchases(activity: android.app.Activity) {
+    /** Outcome of a restore attempt, so the UI can show progress and a definite result. */
+    sealed class RestoreResult {
+        object Restored : RestoreResult()
+        object NothingToRestore : RestoreResult()
+        data class Failed(val message: String) : RestoreResult()
+    }
+
+    /**
+     * Suspends until the Billing query completes and returns what happened.
+     *
+     * Previously this fired queryPurchasesAsync and returned immediately, so the caller
+     * had no way to know when it finished - the button showed no progress and users on a
+     * slow connection would tap it repeatedly. It also called activity.recreate() on
+     * success, rebuilding the whole screen when the isPremium StateFlow already drives
+     * recomposition (the purchase path deliberately avoids that).
+     */
+    suspend fun restorePurchases(): RestoreResult {
         if (!ensureBillingConnection()) {
-             withContext(Dispatchers.Main) {
-                Toast.makeText(activity, "Cannot connect to Store", Toast.LENGTH_SHORT).show()
-            }
-            return
+            return RestoreResult.Failed("Cannot connect to Google Play Store")
         }
-        
-        billingClient.queryPurchasesAsync(
-            com.android.billingclient.api.QueryPurchasesParams.newBuilder()
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build()
-        ) { result, purchases ->
-            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                processPurchases(purchases)
-                
-                // User Feedback
-                val isPremiumNow = purchases.any { it.products.contains(PRODUCT_ID_PREMIUM) && it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                activity.runOnUiThread {
-                     if (isPremiumNow) {
-                         Toast.makeText(activity, "Purchases Restored! \uD83D\uDC8E", Toast.LENGTH_SHORT).show()
-                         activity.recreate()
-                     } else {
-                         Toast.makeText(activity, "No active Premium subscription found", Toast.LENGTH_SHORT).show()
-                     }
-                }
-            } else {
-                activity.runOnUiThread {
-                    Toast.makeText(activity, "Restore failed: ${result.debugMessage}", Toast.LENGTH_SHORT).show()
+
+        return suspendCancellableCoroutine { cont ->
+            billingClient.queryPurchasesAsync(
+                com.android.billingclient.api.QueryPurchasesParams.newBuilder()
+                    .setProductType(BillingClient.ProductType.INAPP)
+                    .build()
+            ) { result, purchases ->
+                if (!cont.isActive) return@queryPurchasesAsync
+                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    processPurchases(purchases)
+                    val isPremiumNow = purchases.any {
+                        it.products.contains(PRODUCT_ID_PREMIUM) &&
+                            it.purchaseState == Purchase.PurchaseState.PURCHASED
+                    }
+                    cont.resume(
+                        if (isPremiumNow) RestoreResult.Restored else RestoreResult.NothingToRestore
+                    ) { _, _, _ -> }
+                } else {
+                    cont.resume(RestoreResult.Failed(result.debugMessage.ifBlank { "Restore failed" })) { _, _, _ -> }
                 }
             }
         }

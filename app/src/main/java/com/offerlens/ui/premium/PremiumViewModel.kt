@@ -30,9 +30,31 @@ class PremiumViewModel @Inject constructor(
         }
     }
     
-    fun restorePurchases(activity: Activity) {
+    private val _isRestoring = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isRestoring: StateFlow<Boolean> = _isRestoring
+
+    /** One-shot message for the UI to surface, cleared once shown. */
+    private val _restoreMessage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val restoreMessage: StateFlow<String?> = _restoreMessage
+
+    fun restorePurchases() {
+        if (_isRestoring.value) return // ignore repeat taps while a query is in flight
         viewModelScope.launch {
-            premiumRepository.restorePurchases(activity)
+            _isRestoring.value = true
+            try {
+                _restoreMessage.value = when (val result = premiumRepository.restorePurchases()) {
+                    is PremiumRepository.RestoreResult.Restored -> "Purchases restored 💎"
+                    is PremiumRepository.RestoreResult.NothingToRestore ->
+                        "No previous purchase found on this Google account"
+                    is PremiumRepository.RestoreResult.Failed -> "Restore failed: ${result.message}"
+                }
+            } finally {
+                _isRestoring.value = false
+            }
         }
+    }
+
+    fun consumeRestoreMessage() {
+        _restoreMessage.value = null
     }
 }

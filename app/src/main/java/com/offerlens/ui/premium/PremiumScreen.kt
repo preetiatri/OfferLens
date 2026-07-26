@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -54,6 +55,17 @@ fun PremiumScreen(
     val context = LocalContext.current
     val isPremium by viewModel.isPremium.collectAsState()
     val price by viewModel.price.collectAsState(initial = null)
+    val isRestoring by viewModel.isRestoring.collectAsState()
+    val restoreMessage by viewModel.restoreMessage.collectAsState()
+
+    // Surface the restore outcome once, then clear it so it doesn't reappear on
+    // recomposition or when returning to this screen.
+    restoreMessage?.let { message ->
+        androidx.compose.runtime.LaunchedEffect(message) {
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.consumeRestoreMessage()
+        }
+    }
 
 
     Scaffold(
@@ -173,18 +185,28 @@ fun PremiumScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Restore Purchases",
-                        color = Color.Gray,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .clickable {
-                                val activity = context.findActivity()
-                                if (activity != null) {
-                                    viewModel.restorePurchases(activity)
-                                }
-                            }
-                    )
+                    if (isRestoring) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Checking your purchases…", color = Color.Gray)
+                        }
+                    } else {
+                        Text(
+                            text = "Restore Purchases",
+                            color = Color.Gray,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .clickable { viewModel.restorePurchases() }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
