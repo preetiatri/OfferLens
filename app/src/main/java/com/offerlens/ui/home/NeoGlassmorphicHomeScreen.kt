@@ -355,59 +355,14 @@ fun NeoGlassmorphicHomeScreen(
                 pageSpacing = 16.dp,
                 key = { index -> categories[index] } // Stable key for Pager
             ) { pageIndex ->
-                // Offers List - NOW using the pre-filtered 'offers' from ViewModel
-                // Note: The ViewModel filters based on 'selectedCategory'. 
-                // Since HorizontalPager renders adjacent pages, we effectively want each page to show ITS category.
-                // However, our ViewModel design is "Global Filter". 
-                // To keep the "Swipe" effect working traditionally, we might need to filter locally OR 
-                // accepting that the generic 'offers' list reflects the *current* page.
-                // Given the requirement for smooth performance, Generic filtering in VM is best IF we don't need to see neighbors populated with THEIR category content.
-                // BUT, standard Pager behavior shows neighbor content.
-                // If we want neighbors to be correct, we must filter locally.
-                // Tradeoff: VM Filtering is better for "Searching" or "One big list".
-                // Pager implies "Multiple lists".
-                // COMPROMISE: We will usage the VM 'allOffers' (which we need to expose again) or just filter locally for the Pager.
-                // Wait, I refactored VM to expose `offers` (filtered). I might have broken the Pager's ability to show side-by-side different categories.
-                // Let's stick to the user's original design: Local Filtering in Composable for Pager support is clearer visually,
-                // BUT expensive.
-                // OPTIMIZED APPROACH:  Since we want 60fps, we'll keep local filtering BUT make it efficient.
-                // We'll revert to using `allOffers` (which I renamed `offers` in the file... I need to correct the Variable name in line 54 if I want to use `allOffers`).
-                // Actually, let's look at the previous code: it captured `allOffers` and filtered locally.
-                // I will re-implement efficient local filtering inside the Pager.
-                
+                // Division of labour: the ViewModel filters by search/premium/wallet (the
+                // expensive, global concerns), and each pager page filters its own
+                // category locally. The pager renders neighbouring pages, so per-page
+                // category filtering is what keeps adjacent swipes showing the right
+                // content - a single globally-category-filtered list would leave
+                // neighbour pages empty or wrong mid-swipe.
                 val currentCategory = categories[pageIndex]
-                
-                // Efficient Local Filtering (Memoized)
-                // We use the viewModel.offers (which is now FILTERED) if we are in "All" or if we want global search.
-                // BUT, if we are swiping, we need different data per page.
-                // Let's assume the VM provides the raw list too.
-                // FIX: I will cast viewModel.offers back to raw list conceptually or add a new accessor. 
-                // Actually, I just replaced `_offers` in VM. The `offers` property is filtered.
-                // I need to add `rawOffers` to VM or just filter on the UI side if I want Pager behavior.
-                // FOR NOW: To ensure SAFETY and FUNCTIONALITY, I will rely on the VM's filtered list for the ACTIVE page,
-                // and accept that off-screen pages might be empty or wrong until swiped to?
-                // No, that looks glitchy.
-                // CORRECT FIX: The UI *already* filtered locally. I should keep that but optimize it.
-                // I will update the VM to expose `rawOffers` in the next step if checking shows it's missing.
-                // Looking at my previous VM edit: `_offers` is private. `offers` is filtered.
-                // I effectively made `offers` the *result*. 
-                // USE CASE CORRECTION: If I want the Pager to work (swiping between "Dining" and "Travel"), "Dining" page needs Dining offers, "Travel" needs Travel offers.
-                // The VM `offers` only holds ONE of them at a time (the selected one).
-                // So the other pages would be empty.
-                // I MUST expose `allOffers` from VM for the Pager to work correctly with side-by-side pages.
-                
-                // However, I can't edit VM in this `multi_replace`.
-                // I will assume I will fix VM in a subsequent step or parallel.
-                // Use `viewModel.offers` for now, but be aware of the "Single Category" limitation.
-                // Actually, for "All" category, it returns all. 
-                // Let's just use local filtering on the `offers` (which are currently being filtered by VM).
-                // This is a conflict. 
-                // UNLESS: I change the VM to ONLY filter by Search Query, and let UI handle Category.
-                // That is the best compromise. VM handles Search (heavy), UI handles Category (light).
-                
-                // Let's implement that change in VM after this.
-                // For this file, I will assume `offers` contains everything (filtered by search only).
-                
+
                 val categoryOffers = remember(offers, currentCategory) {
                     if (currentCategory == "All") {
                         offers

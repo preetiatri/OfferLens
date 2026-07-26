@@ -11,8 +11,22 @@ class UserRepository @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
     suspend fun saveUserPreferences(userId: String, user: User) {
+        // Write an explicit field map rather than the User object. Serializing the data
+        // class includes isPremium (Kotlin emits defaulted fields), and the Firestore
+        // create rule rejects any client write whose keys include isPremium or admin -
+        // so every NEW user's preference save was denied outright, and an update by a
+        // user an admin had granted premium would have been denied too (writing
+        // isPremium=false over true counts as changing a protected key).
+        val data = mapOf(
+            "id" to user.id,
+            "name" to user.name,
+            "email" to user.email,
+            "preferredBanks" to user.preferredBanks,
+            "preferredPaymentTypes" to user.preferredPaymentTypes,
+            "createdAt" to user.createdAt
+        )
         firestore.collection("users").document(userId)
-            .set(user, SetOptions.merge())
+            .set(data, SetOptions.merge())
             .await()
     }
 

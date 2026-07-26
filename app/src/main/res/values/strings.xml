@@ -10,7 +10,6 @@
     <string name="search_suggestion">Try searching for something else in \'%1$s\'</string>
     <string name="check_back_later">Check back later for %1$s offers</string>
     <string name="expires_prefix">Expires %1$s</string>
-    <string name="expires_soon">Expires Soon</string>
     <string name="new_badge">NEW</string>
     <string name="copied_toast">✓ Copied: %1$s</string>
     <string name="no_code_toast">No coupon code available</string>
@@ -33,7 +32,7 @@
     <!-- Onboarding -->
     <string name="welcome_to">Welcome to</string>
     <string name="get_started">Get Started</string>
-    <string name="signing_in_wait">Signing in... Please wait</string>
+    <string name="signing_in_wait">Signing in… Please wait</string>
     <string name="welcome_back">Welcome back to OfferLens!</string>
     <string name="error_saving_profile">Failed to save profile. Please check your connection.</string>
 </resources>

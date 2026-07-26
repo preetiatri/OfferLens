@@ -185,6 +185,14 @@ class HomeViewModel @Inject constructor(
 
     fun logOfferClick(offerId: String, merchant: String) {
         Timber.d("Offer Clicked: $merchant ($offerId)")
+        // select_content is the standard GA4 event for this; using it (rather than a
+        // custom name) makes the data show up in Firebase's built-in reports.
+        val params = android.os.Bundle().apply {
+            putString(com.google.firebase.analytics.FirebaseAnalytics.Param.CONTENT_TYPE, "offer")
+            putString(com.google.firebase.analytics.FirebaseAnalytics.Param.ITEM_ID, offerId)
+            putString("merchant", merchant)
+        }
+        analytics.logEvent(com.google.firebase.analytics.FirebaseAnalytics.Event.SELECT_CONTENT, params)
     }
     
     // Sign-out function
@@ -207,6 +215,9 @@ class HomeViewModel @Inject constructor(
             try {
                 userRepository.deleteUserData(uid)
                 authRepository.deleteAccount().getOrThrow()
+                // Local preferences too - the policy promises preference removal, and
+                // leaving these would hand the next account this user's card list.
+                smartWalletRepository.clearAll()
                 Timber.d("User data deleted for $uid")
                 onComplete()
             } catch (e: Exception) {

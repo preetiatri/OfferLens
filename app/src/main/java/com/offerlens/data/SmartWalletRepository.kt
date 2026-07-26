@@ -114,6 +114,17 @@ class SmartWalletRepository @Inject constructor(
         }
     }
 
+    /**
+     * Wipes the card selection and filter flag. Called from "Delete My Data" - without
+     * this, the next account on the device inherited the previous user's card list,
+     * despite the privacy policy promising preference removal.
+     */
+    suspend fun clearAll() {
+        _myCards.value = emptySet()
+        _isFilterEnabled.value = false
+        context.walletDataStore.edit { it.clear() }
+    }
+
     fun toggleCard(bankName: String) {
         val current = _myCards.value.toMutableSet()
         if (current.contains(bankName)) {

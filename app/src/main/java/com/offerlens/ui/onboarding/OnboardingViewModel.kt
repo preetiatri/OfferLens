@@ -16,12 +16,18 @@ class OnboardingViewModel @Inject constructor(
     private val userRepository: UserRepository
 ) : ViewModel() {
 
+    private var isCompleting = false
+
     fun completeOnboarding(
-        selectedBanks: List<String>, 
-        selectedPaymentTypes: List<String>, 
+        selectedBanks: List<String>,
+        selectedPaymentTypes: List<String>,
         onComplete: () -> Unit,
         onError: (Exception) -> Unit = {}
     ) {
+        // Guard against double taps on "Get Started" - a second press mid-sign-in would
+        // run the whole flow twice (two sign-in attempts, two saves, two toasts).
+        if (isCompleting) return
+        isCompleting = true
         Timber.d("completeOnboarding called with banks: $selectedBanks, types: $selectedPaymentTypes")
         viewModelScope.launch {
             try {
@@ -54,6 +60,10 @@ class OnboardingViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "Error in completeOnboarding: ${e.message}")
                 onError(e)
+            } finally {
+                // Re-arm so the user can retry after a failure (on success the screen
+                // navigates away and this ViewModel is discarded anyway).
+                isCompleting = false
             }
         }
     }
