@@ -378,6 +378,20 @@
 
         <!-- View: Manual Add -->
         <div id="tab-manual" class="section">
+            <div class="card" style="border-left: 4px solid var(--primary);">
+                <h2 style="margin-bottom: 8px;">⚡ Quick Parse</h2>
+                <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+                    Open the bank's offer page, select all (Ctrl+A) and copy (Ctrl+C), then paste below.
+                    This fills in whatever it can detect — always review before saving.
+                </p>
+                <textarea id="parseInput" rows="6" placeholder="Paste the copied offer text here..."></textarea>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <button type="button" class="btn btn-primary" onclick="window.parseOfferText()">Parse &amp; Fill Form</button>
+                    <button type="button" class="btn btn-outline" onclick="document.getElementById('parseInput').value=''; document.getElementById('parseResult').innerHTML='';">Clear</button>
+                </div>
+                <div id="parseResult" style="margin-top: 16px;"></div>
+            </div>
+
             <div class="card">
                 <h2 style="margin-bottom: 24px;">New Manual Offer</h2>
                 <form id="manualOfferForm">
@@ -557,6 +571,211 @@
             "Citibank", "American Express", "Standard Chartered", "RBL Bank",
             "IndusInd Bank", "OneCard", "Amazon Pay"
         ];
+
+        // ---------- QUICK PARSE ----------
+        // Extracts offer fields from text the admin has copied off a bank's offer page.
+        // Deliberately best-effort: it pre-fills what it can recognise and reports what
+        // it found, leaving the admin to verify. Nothing is auto-saved.
+
+        // Distinctive tokens rather than full names, since pages say "Axis Bank Credit
+        // Card" or "SBI Credit Card" rather than the exact list entry ("SBI Card").
+        const BANK_TOKENS = {
+            "HDFC Bank": ["hdfc"],
+            "SBI Card": ["sbi", "state bank"],
+            "ICICI Bank": ["icici"],
+            "Axis Bank": ["axis"],
+            "Kotak Mahindra": ["kotak"],
+            "Citibank": ["citibank", "citi bank"],
+            "American Express": ["american express", "amex"],
+            "Standard Chartered": ["standard chartered", "stanchart"],
+            "RBL Bank": ["rbl"],
+            "IndusInd Bank": ["indusind"],
+            "OneCard": ["onecard", "one card"],
+            "Amazon Pay": ["amazon pay"]
+        };
+
+        const CATEGORY_KEYWORDS = {
+            "Travel": ["flight", "hotel", "travel", "bus ", "trip", "airline", "holiday", "cab", "railway", "irctc"],
+            "Dining": ["dining", "restaurant", "food", "swiggy", "zomato", "pizza", "cafe", "eatery"],
+            "Shopping": ["shopping", "fashion", "apparel", "myntra", "flipkart", "ajio", "nykaa", "footwear", "electronics"],
+            "Entertainment": ["movie", "entertainment", "bookmyshow", "netflix", "cinema", "ott", "subscription"],
+            "Groceries": ["grocery", "groceries", "bigbasket", "blinkit", "zepto", "supermarket", "instamart", "dmart"],
+            "Bill Pay & Recharges": ["bill pay", "bill payment", "recharge", "electricity", "postpaid", "prepaid", "dth", "utility"],
+            "Wallet/UPI Offers": ["upi", "wallet", "paytm", "phonepe", "gpay", "google pay", "mobikwik"]
+        };
+
+        // Matches Rs. 5,000 / Rs 5000 / INR 5000 / 5000 preceded by a currency marker.
+        const MONEY = "(?:rs\\.?|inr|₹)\\s*([\\d,]+(?:\\.\\d+)?)";
+        const num = (s) => parseFloat(String(s).replace(/,/g, ""));
+
+        function parseDateLoose(text) {
+            const months = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+            let m;
+            // 31/12/2026 or 31-12-2026
+            if ((m = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/))) {
+                return `${m[3]}-${String(m[2]).padStart(2, "0")}-${String(m[1]).padStart(2, "0")}`;
+            }
+            // 2026-12-31
+            if ((m = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))) return m[0];
+            // 31 Dec 2026  /  31st December 2026
+            const re = new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + months + ")[a-z]*\\.?,?\\s+(\\d{4})\\b", "i");
+            if ((m = text.match(re))) {
+                const idx = months.split("|").indexOf(m[2].toLowerCase().slice(0, 3)) + 1;
+                if (idx > 0) return `${m[3]}-${String(idx).padStart(2, "0")}-${String(m[1]).padStart(2, "0")}`;
+            }
+            return null;
+        }
+
+        window.parseOfferText = function () {
+            const rawInput = document.getElementById('parseInput').value;
+            const resultEl = document.getElementById('parseResult');
+            if (!rawInput.trim()) {
+                resultEl.innerHTML = '<span style="color:var(--error)">Paste some offer text first.</span>';
+                return;
+            }
+
+            const text = rawInput.replace(/\s+/g, ' ').trim();
+            const lower = text.toLowerCase();
+            const found = [];
+            const missing = [];
+
+            // --- Bank ---
+            let bank = null;
+            for (const [name, tokens] of Object.entries(BANK_TOKENS)) {
+                if (tokens.some(t => lower.includes(t))) { bank = name; break; }
+            }
+            if (bank) {
+                document.getElementById('m_bankName_select').value = bank;
+                document.getElementById('m_bankName_other').style.display = 'none';
+                found.push(['Bank', bank]);
+            } else {
+                missing.push('Bank');
+            }
+
+            // --- Discount type / value / cap ---
+            const pct = text.match(/(\d+(?:\.\d+)?)\s*%/);
+            const capM = text.match(new RegExp("(?:up\\s*to|upto|max(?:imum)?\\.?)\\s*(?:discount\\s*(?:of)?\\s*)?" + MONEY, "i"));
+            const flatM = text.match(new RegExp("(?:flat\\s*)?" + MONEY + "\\s*(?:off|discount|cashback)", "i"));
+            const isCashback = /cashback/i.test(text);
+
+            let dType = null, dValue = null, dCap = null;
+            if (pct) {
+                dType = isCashback ? 'Cashback' : 'Percentage';
+                dValue = num(pct[1]);
+                if (capM) dCap = num(capM[1]);
+            } else if (capM) {
+                // "Up to Rs 5000 off" with no percentage: the amount IS the discount ceiling.
+                dType = isCashback ? 'Cashback' : 'Flat';
+                dValue = num(capM[1]);
+            } else if (flatM) {
+                dType = isCashback ? 'Cashback' : 'Flat';
+                dValue = num(flatM[1]);
+            }
+
+            if (dType) {
+                document.getElementById('m_discountType').value = dType;
+                document.getElementById('m_discountValue').value = dValue;
+                found.push(['Discount', dType === 'Percentage' ? dValue + '%' : '₹' + dValue + ' (' + dType + ')']);
+            } else {
+                missing.push('Discount type/value');
+            }
+            if (dCap) {
+                document.getElementById('m_maxDiscount').value = dCap;
+                found.push(['Max discount', '₹' + dCap]);
+            }
+
+            // --- Min order ---
+            const minM = text.match(new RegExp("min(?:imum)?\\.?\\s*(?:order|purchase|transaction|spend|booking|cart)?\\s*(?:value|amount|of)?\\s*(?:of\\s*)?" + MONEY, "i"));
+            if (minM) {
+                document.getElementById('m_minOrder').value = num(minM[1]);
+                found.push(['Min order', '₹' + num(minM[1])]);
+            }
+
+            // --- Payment type ---
+            // Check for "credit"/"debit" independently of the word "card", because pages
+            // commonly write "Debit or Credit Card" - requiring "debit card" adjacently
+            // would miss the debit half entirely.
+            const pay = [];
+            const mentionsCard = /\bcards?\b/i.test(text);
+            if (mentionsCard && /\bcredit\b/i.test(text)) pay.push('Credit Card');
+            if (mentionsCard && /\bdebit\b/i.test(text)) pay.push('Debit Card');
+            if (/\bupi\b/i.test(text)) pay.push('UPI');
+            if (/wallet/i.test(text)) pay.push('Wallet');
+            if (pay.length) {
+                document.getElementById('m_paymentType').value = pay.join(', ');
+                found.push(['Payment type', pay.join(', ')]);
+            } else {
+                missing.push('Payment type');
+            }
+
+            // --- Category ---
+            let bestCat = null, bestHits = 0;
+            for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
+                const hits = words.filter(w => lower.includes(w)).length;
+                if (hits > bestHits) { bestHits = hits; bestCat = cat; }
+            }
+            if (bestCat) {
+                document.getElementById('m_category').value = bestCat;
+                found.push(['Category', bestCat + ' (guessed)']);
+            } else {
+                missing.push('Category');
+            }
+
+            // --- Coupon code ---
+            const codeM = text.match(/(?:coupon|promo)?\s*code\s*:?\s*["']?([A-Z0-9][A-Z0-9_-]{3,19})["']?/);
+            if (codeM) {
+                document.getElementById('m_coupon').value = codeM[1];
+                found.push(['Coupon code', codeM[1]]);
+            }
+
+            // --- Expiry ---
+            // Prefer a date sitting next to validity wording, but fall back to scanning the
+            // whole text - "valid" often appears first in an unrelated clause ("valid only
+            // on flights"), which would otherwise shadow the real expiry further down.
+            const validSegment = text.match(/(?:valid till|valid until|valid upto|valid up to|expires? on|expiry)[^.]{0,60}/i);
+            let dateStr = validSegment ? parseDateLoose(validSegment[0]) : null;
+            if (!dateStr) dateStr = parseDateLoose(text);
+            if (dateStr) {
+                document.getElementById('m_endDate').value = dateStr;
+                found.push(['Valid until', dateStr]);
+            } else {
+                missing.push('Valid until');
+            }
+
+            // --- Description: the first headline-ish line from the ORIGINAL text ---
+            const headline = rawInput.split(/\r?\n/)
+                .map(l => l.trim())
+                .filter(l => l.length >= 15 && l.length <= 120)
+                .find(l => /\d|%|off|cashback|discount/i.test(l));
+            if (headline) {
+                document.getElementById('m_description').value = headline;
+                found.push(['Description', headline]);
+            } else {
+                missing.push('Description');
+            }
+
+            missing.push('Merchant');
+
+            // Render summary. escapeHtml because every value here came from pasted text.
+            let html = '';
+            if (found.length) {
+                html += '<div style="color:var(--success); font-weight:600; margin-bottom:8px;">Filled ' + found.length + ' field(s):</div>';
+                html += '<ul style="margin-left:18px; font-size:13px; color:var(--text-dim);">' +
+                    found.map(([k, v]) => '<li><strong>' + escapeHtml(k) + ':</strong> ' + escapeHtml(v) + '</li>').join('') +
+                    '</ul>';
+            }
+            html += '<div style="color:#FFC107; font-weight:600; margin:12px 0 8px;">Enter or check manually:</div>' +
+                '<ul style="margin-left:18px; font-size:13px; color:var(--text-dim);">' +
+                missing.map(m => '<li>' + escapeHtml(m) + '</li>').join('') +
+                '</ul>' +
+                '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(255,193,7,0.12); color:#FFC107; font-size:13px;">' +
+                'Terms &amp; Conditions is intentionally left blank. Write a short summary in your own words rather than ' +
+                'pasting the bank\'s text — their wording is their copyright, and a concise summary reads better in the app.' +
+                '</div>';
+            resultEl.innerHTML = html;
+
+            document.getElementById('m_merchant').focus();
+        };
 
         (function populateBankDropdown() {
             const select = document.getElementById('m_bankName_select');
