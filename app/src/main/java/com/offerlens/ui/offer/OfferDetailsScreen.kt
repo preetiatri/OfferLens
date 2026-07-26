@@ -386,6 +386,38 @@ fun OfferDetailsScreen(
                             )
                         }
                     }
+                } else if (currentOffer.couponRevealedOnSite) {
+                    // A code IS needed, it just isn't published here. Say so, so the user
+                    // doesn't click through expecting the discount to apply automatically.
+                    Text(
+                        text = "COUPON CODE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = neonColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "This offer needs a coupon code, which is shown on the bank or merchant's site. Copy it there and apply it at checkout.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -405,17 +437,26 @@ fun OfferDetailsScreen(
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                    val dateStr = if (currentOffer.endDate != null) formatter.format(currentOffer.endDate.toDate()) else "N/A"
-                    
+                    val formatter = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+                    // Say plainly that no expiry was published rather than "N/A", which
+                    // reads like missing data instead of a fact about the offer.
+                    val dateStr = currentOffer.endDate?.let { formatter.format(it.toDate()) }
+                        ?: "Not stated"
+
                     DetailItem(
                         label = "Valid Until",
                         value = dateStr,
                         modifier = Modifier.weight(1f)
                     )
+                    // A tiered offer's minimum varies per product, so a single figure here
+                    // would be wrong - the breakdown above carries the real numbers.
                     DetailItem(
                         label = "Min. Order",
-                        value = "₹${currentOffer.minOrderValue?.toInt() ?: 0}",
+                        value = when {
+                            currentOffer.tiers.isNotEmpty() -> "See breakdown"
+                            (currentOffer.minOrderValue ?: 0.0) > 0 -> "₹${currentOffer.minOrderValue!!.toInt()}"
+                            else -> "None"
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }

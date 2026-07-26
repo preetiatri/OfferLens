@@ -47,6 +47,7 @@ data class OfferEntity(
     val failCount: Int,
     val category: String,
     val couponCode: String,
+    val couponRevealedOnSite: Boolean,
     val termsAndConditions: String,
     val termsCompleteness: Int,
     val termsLastUpdatedSeconds: Long?,
@@ -127,6 +128,7 @@ fun com.offerlens.data.Offer.toEntity(): OfferEntity {
         failCount = failCount,
         category = category,
         couponCode = couponCode,
+        couponRevealedOnSite = couponRevealedOnSite,
         termsAndConditions = termsAndConditions,
         termsCompleteness = termsCompleteness,
         termsLastUpdatedSeconds = termsLastUpdated?.seconds,
@@ -169,9 +171,10 @@ fun OfferEntity.toOffer(): com.offerlens.data.Offer {
         failCount = failCount,
         category = category,
         couponCode = couponCode,
+        couponRevealedOnSite = couponRevealedOnSite,
         termsAndConditions = termsAndConditions,
         termsCompleteness = termsCompleteness,
-        termsLastUpdated = if (termsLastUpdatedSeconds != null && termsLastUpdatedNanos != null) 
+        termsLastUpdated = if (termsLastUpdatedSeconds != null && termsLastUpdatedNanos != null)
             Timestamp(termsLastUpdatedSeconds, termsLastUpdatedNanos) else null,
         lastFetchedAt = if (lastFetchedAtSeconds != null && lastFetchedAtNanos != null) 
             Timestamp(lastFetchedAtSeconds, lastFetchedAtNanos) else null,

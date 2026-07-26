@@ -15,6 +15,8 @@
     <string name="copied_toast">✓ Copied: %1$s</string>
     <string name="no_code_toast">No coupon code available</string>
     <string name="no_code_label">No Code</string>
+    <string name="code_on_site_label">Code on site</string>
+    <string name="code_on_site_toast">This offer\'s code is shown on the bank/merchant site — apply it there at checkout</string>
     <string name="copy_id_button">Copy ID</string>
     <string name="close_button">Close</string>
     <string name="user_id_label">User ID (Support):</string>

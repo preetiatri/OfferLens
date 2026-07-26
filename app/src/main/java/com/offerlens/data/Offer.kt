@@ -47,6 +47,13 @@ data class Offer(
     val failCount: Int = 0,
     val category: String = "", // Dining, Travel, Shopping, Entertainment, Groceries, Bill Pay & Recharges
     val couponCode: String = "",
+    /**
+     * True when a code is required but only shown on the bank's or merchant's site (bank
+     * portals like Axis Grab Deals reveal it after login). Without this the card would
+     * say "No Code", and a user could click through assuming the discount applies
+     * automatically and miss the step where they have to apply it.
+     */
+    val couponRevealedOnSite: Boolean = false,
     
     // Enhanced T&C fields
     val termsAndConditions: String = "",

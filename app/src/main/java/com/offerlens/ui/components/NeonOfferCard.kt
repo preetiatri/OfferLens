@@ -60,15 +60,13 @@ fun NeonOfferCard(
         "₹$value OFF"
     }
     
-    // Format date
-    val dateText = try {
-        if (offer.endDate != null) {
-            context.getString(R.string.expires_prefix, offerDateFormatter.format(offer.endDate.toDate()))
-        } else {
-            context.getString(R.string.expires_soon)
-        }
+    // Null when the offer has no stated end date, in which case the line is omitted
+    // rather than shown as "Expires Soon". Many bank offers simply don't publish an
+    // expiry, and inventing urgency we can't back up misleads the user.
+    val dateText: String? = try {
+        offer.endDate?.let { context.getString(R.string.expires_prefix, offerDateFormatter.format(it.toDate())) }
     } catch (e: Exception) {
-        context.getString(R.string.expires_soon)
+        null
     }
     
     // Determine color based on discount and theme
@@ -244,12 +242,14 @@ fun NeonOfferCard(
                         maxLines = 2,
                         lineHeight = 14.sp
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = dateText,
-                        fontSize = 11.sp,
-                        color = Color.Gray.copy(alpha = 0.7f)
-                    )
+                    dateText?.let {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = it,
+                            fontSize = 11.sp,
+                            color = Color.Gray.copy(alpha = 0.7f)
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.weight(1f))
@@ -257,6 +257,9 @@ fun NeonOfferCard(
                 // Copy Code Button
                 val cleanCode = offer.couponCode.trim()
                 val hasCode = cleanCode.isNotEmpty()
+                // Bank portals often reveal the code only after login, so "No Code" would
+                // wrongly suggest the discount applies without one.
+                val codeOnSite = !hasCode && offer.couponRevealedOnSite
                 
                 Box(
                     modifier = Modifier
@@ -285,8 +288,10 @@ fun NeonOfferCard(
                             } else {
                                 android.widget.Toast.makeText(
                                     context,
-                                    context.getString(R.string.no_code_toast),
-                                    android.widget.Toast.LENGTH_SHORT
+                                    context.getString(
+                                        if (codeOnSite) R.string.code_on_site_toast else R.string.no_code_toast
+                                    ),
+                                    android.widget.Toast.LENGTH_LONG
                                 ).show()
                             }
                         },
@@ -316,7 +321,9 @@ fun NeonOfferCard(
                             )
                         } else {
                             Text(
-                                text = context.getString(R.string.no_code_label),
+                                text = context.getString(
+                                    if (codeOnSite) R.string.code_on_site_label else R.string.no_code_label
+                                ),
                                 color = neonColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
