@@ -495,8 +495,19 @@
                             </small>
                         </div>
                         <div>
-                            <label>Source URL</label>
-                            <input type="url" id="m_url">
+                            <label>Merchant URL</label>
+                            <input type="url" id="m_url" placeholder="https://www.easemytrip.com">
+                            <small style="color: var(--text-dim); display:block; margin-top:4px;">
+                                The merchant's own site. Powers the "Visit merchant" button and the card logo.
+                            </small>
+                        </div>
+                        <div>
+                            <label>Offer Source URL — optional</label>
+                            <input type="url" id="m_sourceUrl" placeholder="https://grabdeals.axis.bank.in/...">
+                            <small style="color: var(--text-dim); display:block; margin-top:4px;">
+                                The bank/portal page this offer came from. For offers that must be started from
+                                the bank's site (e.g. Grab Deals), this is the link users actually need.
+                            </small>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-primary" id="m_submitBtn" style="width: 100%; margin-top: 10px;">Save to Firebase</button>
@@ -664,7 +675,7 @@
             // minimum order. Merchant is left alone: the parser never sets it, the admin
             // types it, and it's listed under "check manually" on every parse.
             ['m_discountValue', 'm_maxDiscount', 'm_minOrder', 'm_paymentType',
-             'm_coupon', 'm_endDate', 'm_description', 'm_bankName_other'
+             'm_coupon', 'm_endDate', 'm_description', 'm_bankName_other', 'm_sourceUrl'
             ].forEach(id => { document.getElementById(id).value = ''; });
             document.getElementById('m_bankName_select').value = '';
             document.getElementById('m_bankName_other').style.display = 'none';
@@ -851,6 +862,19 @@
             } else {
                 missing.push('Description');
             }
+
+            // --- URLs ---
+            // A bank/portal URL in the pasted text is the offer's source, not the
+            // merchant's own site, so it must not land in Merchant URL - that would point
+            // the "Visit merchant" button (and the affiliate link) at the wrong place.
+            const urlM = rawInput.match(/https?:\/\/[^\s"'<>)]+/i);
+            if (urlM) {
+                document.getElementById('m_sourceUrl').value = urlM[0];
+                found.push(['Offer source URL', urlM[0]]);
+            } else {
+                missing.push('Offer source URL (the bank/portal page)');
+            }
+            missing.push('Merchant URL (the merchant\'s own site)');
 
             missing.push('Merchant');
 
@@ -1245,6 +1269,7 @@
                 couponCode: document.getElementById('m_coupon').value,
                 couponRevealedOnSite: document.getElementById('m_couponOnSite').checked,
                 merchantUrl: document.getElementById('m_url').value,
+                offerSourceUrl: document.getElementById('m_sourceUrl').value,
                 isActive: true,
                 createdAt: serverTimestamp(),
                 endDate: document.getElementById('m_endDate').value ? Timestamp.fromDate(new Date(document.getElementById('m_endDate').value)) : null
@@ -1343,7 +1368,12 @@
                     description: item['Description'] || '',
                     termsAndConditions: item['Terms & C'] || '',
                     couponCode: item['Coupon Code'] || '',
-                    sourceUrl: item['Offer Source'] || '',
+                    // Was previously written as "sourceUrl", which is not a field on the
+                    // Offer model - every bulk-uploaded offer silently lost its source
+                    // link. "Merchant URL" was never read at all, so bulk offers also had
+                    // no merchant link (no "Visit merchant" button) and no favicon.
+                    merchantUrl: item['Merchant URL'] || '',
+                    offerSourceUrl: item['Offer Source'] || '',
                     isActive: true,
                     createdAt: serverTimestamp(),
                     endDate: endDate ? Timestamp.fromDate(endDate) : null
