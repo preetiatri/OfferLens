@@ -473,8 +473,14 @@
                             <button type="button" class="btn btn-outline" onclick="window.addTierRow()" style="margin-top:4px;">+ Add product tier</button>
                         </div>
                         <div class="full-width">
-                            <label>Terms & Conditions</label>
-                            <textarea id="m_tnc" rows="4"></textarea>
+                            <label>Terms &amp; Conditions</label>
+                            <textarea id="m_tnc" rows="10"></textarea>
+                            <button type="button" class="btn btn-outline" onclick="window.generateTnc()" style="margin-top:4px;">Generate from offer details</button>
+                            <small style="color: var(--text-dim); display:block; margin-top:6px;">
+                                Builds a summary from the fields above plus the standard OfferLens disclaimer.
+                                Fill in the offer details first, then generate. Only facts you have entered are
+                                included — nothing is invented. Review and edit before saving.
+                            </small>
                         </div>
                         <div>
                             <label>Coupon Code</label>
@@ -729,6 +735,7 @@
                 tiersDetected.forEach(t => window.addTierRow(t));
                 found.push(['Product tiers', tiersDetected.length + ' detected']);
             }
+            const hasTiers = tiersDetected.length > 1;
 
             if (dType) {
                 document.getElementById('m_discountType').value = dType;
@@ -743,8 +750,13 @@
             }
 
             // --- Min order ---
+            // Skipped entirely for tiered offers: each tier carries its own minimum, and
+            // the first one found belongs to just one product (the Axis hotel minimum
+            // would otherwise be attached to the flight tiers, which have none).
             const minM = text.match(new RegExp("min(?:imum)?\\.?\\s*(?:order|purchase|transaction|spend|booking|cart)?\\s*(?:value|amount|of)?\\s*(?:of\\s*)?" + MONEY, "i"));
-            if (minM) {
+            if (hasTiers) {
+                document.getElementById('m_minOrder').value = '';
+            } else if (minM) {
                 document.getElementById('m_minOrder').value = num(minM[1]);
                 found.push(['Min order', '₹' + num(minM[1])]);
             }
@@ -844,8 +856,9 @@
 
             html +=
                 '<div style="margin-top:12px; padding:10px 14px; border-radius:8px; background:rgba(255,193,7,0.12); color:#FFC107; font-size:13px;">' +
-                'Terms &amp; Conditions is intentionally left blank. Write a short summary in your own words rather than ' +
-                'pasting the bank\'s text — their wording is their copyright, and a concise summary reads better in the app.' +
+                'Terms &amp; Conditions is intentionally left blank — the bank\'s wording is their copyright. ' +
+                'Once the fields above look right, use <strong>Generate from offer details</strong> under the T&amp;C box ' +
+                'to build a summary from the facts plus the standard OfferLens disclaimer.' +
                 '</div>';
             resultEl.innerHTML = html;
 
@@ -901,6 +914,85 @@
         function clearTiers() {
             document.getElementById('tierRows').innerHTML = '';
         }
+
+        // ---------- T&C GENERATOR ----------
+        // Composes a summary from the facts already entered on the form, plus OfferLens's
+        // own standard disclaimer. Deliberately does NOT reproduce the bank's wording:
+        // factual terms (card, cap, minimum, expiry) aren't copyrightable, their prose is.
+        // Equally deliberately, it asserts nothing that wasn't entered - inventing plausible
+        // sounding conditions ("cannot be clubbed with other offers") would mislead users.
+        window.generateTnc = function () {
+            const val = id => (document.getElementById(id).value || '').trim();
+            const merchant = val('m_merchant');
+            const bankSel = val('m_bankName_select');
+            const bank = bankSel === '__other__' ? val('m_bankName_other') : bankSel;
+            const payment = val('m_paymentType');
+            const dType = val('m_discountType');
+            const dValue = val('m_discountValue');
+            const maxDisc = val('m_maxDiscount');
+            const minOrder = val('m_minOrder');
+            const coupon = val('m_coupon');
+            const endDate = val('m_endDate');
+            const tiers = collectTiers();
+
+            const money = n => '₹' + Number(n).toLocaleString('en-IN');
+            const prettyDate = iso => {
+                if (!iso) return '';
+                const d = new Date(iso + 'T00:00:00');
+                if (isNaN(d)) return iso;
+                return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            };
+
+            const out = [];
+
+            // --- Eligibility ---
+            const elig = [];
+            if (bank && payment) elig.push(`Valid on ${bank} ${payment}.`);
+            else if (bank) elig.push(`Valid on ${bank} cards.`);
+            if (merchant) elig.push(`Applicable to purchases on ${merchant}.`);
+            if (elig.length) out.push('ELIGIBILITY\n' + elig.map(l => '• ' + l).join('\n'));
+
+            // --- Breakdown / headline discount ---
+            if (tiers.length) {
+                const lines = tiers.map(t => {
+                    const bits = [];
+                    if (t.maxDiscountAmount) bits.push('up to ' + money(t.maxDiscountAmount) + ' off');
+                    if (t.minOrderValue) bits.push('minimum order ' + money(t.minOrderValue));
+                    if (t.note) bits.push(t.note);
+                    return `• ${t.label}: ${bits.join(', ')}`;
+                });
+                out.push('WHAT YOU GET\n' + lines.join('\n'));
+            } else if (dValue) {
+                let line = dType === 'Percentage' ? `${dValue}% off` : `${money(dValue)} off`;
+                if (dType === 'Cashback') line = `${money(dValue)} cashback`;
+                if (maxDisc) line += `, up to ${money(maxDisc)}`;
+                out.push('WHAT YOU GET\n• ' + line + '.');
+            }
+
+            // --- Conditions ---
+            const cond = [];
+            // Skip the blanket minimum when tiers are present: each tier states its own
+            // above, and a single figure here would wrongly imply it applies to all of
+            // them (the Axis hotel minimum doesn't apply to its flight tiers).
+            if (!tiers.length && minOrder && Number(minOrder) > 0) cond.push(`Minimum order value: ${money(minOrder)}.`);
+            if (coupon) cond.push(`Apply coupon code ${coupon} at checkout to avail this offer.`);
+            if (endDate) cond.push(`Offer valid until ${prettyDate(endDate)}.`);
+            if (cond.length) out.push('CONDITIONS\n' + cond.map(l => '• ' + l).join('\n'));
+
+            // --- Standard OfferLens disclaimer (our own wording, applies to every offer) ---
+            const notAffiliated = [bank, merchant].filter(Boolean).join(' or ');
+            out.push(
+                'IMPORTANT\n' +
+                '• Please verify all offer details, terms and conditions on the official website before making a purchase. Offers may change, expire or be withdrawn by the merchant or bank without notice.\n' +
+                (notAffiliated
+                    ? `• OfferLens is an independent offer aggregator and is not affiliated with, endorsed by, or sponsored by ${notAffiliated}. All trademarks belong to their respective owners.\n`
+                    : '• OfferLens is an independent offer aggregator and is not affiliated with, endorsed by, or sponsored by any bank or merchant. All trademarks belong to their respective owners.\n') +
+                '• Offer information is provided "as is" for informational purposes only. OfferLens is not responsible for offer validity, cashback eligibility, rewards that fail to track, or any issue arising from your transaction with the merchant.\n' +
+                '• Additional charges such as convenience or booking fees may apply and are determined by the merchant.'
+            );
+
+            document.getElementById('m_tnc').value = out.join('\n\n');
+        };
 
         (function populateBankDropdown() {
             const select = document.getElementById('m_bankName_select');
