@@ -1260,7 +1260,11 @@
                 maxDiscountAmount: document.getElementById('m_maxDiscount').value
                     ? parseFloat(document.getElementById('m_maxDiscount').value)
                     : null,
-                minOrderValue: parseFloat(document.getElementById('m_minOrder').value),
+                // parseFloat('') is NaN, which Firestore stores happily and the app then
+                // can't compare against - null keeps "no minimum" meaningful.
+                minOrderValue: document.getElementById('m_minOrder').value
+                    ? parseFloat(document.getElementById('m_minOrder').value)
+                    : null,
                 // Empty array for ordinary offers - the app then relies on the top-level
                 // discount fields and shows no breakdown section.
                 tiers: collectTiers(),
