@@ -191,6 +191,42 @@ fun AboutScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // How We Make Money - shown in-app rather than only in the Terms, since a user
+            // deciding whether to trust a recommendation shouldn't have to open a web page
+            // to find out whether we're paid for it.
+            Text(
+                text = "HOW WE MAKE MONEY",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSystemInDarkTheme()) NeonCyan else CyanTeal,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Some links in this app are affiliate links. If you buy after following one, we may earn a commission — at no extra cost to you. The price you pay is the same either way.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "• We rank offers by value to you, not by what pays us\n• We're not paid by any bank to list their offers\n• Many offers earn us nothing — where an offer must be started on a bank's page, the bank gets the commission, and we still send you there so you keep the discount\n• We also earn from ads and optional Premium",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        lineHeight = 19.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Data Sources
             Text(
                 text = "DATA SOURCES",
