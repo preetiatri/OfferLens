@@ -23,8 +23,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # NOTE: actions/checkout is pinned to an immutable commit SHA. The three
+      # actions/*-pages actions below are still on mutable tags - they are
+      # first-party GitHub actions on a manual-only workflow that holds no
+      # signing or Play Store credentials, so the risk is materially lower than
+      # deploy.yml. To pin them, run this workflow once and copy each resolved
+      # SHA from the log's "Download action repository '<action>' (SHA:...)" line.
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
