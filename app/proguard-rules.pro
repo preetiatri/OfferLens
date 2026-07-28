@@ -112,8 +112,13 @@
 # ========================================
 # DATA MODELS
 # ========================================
-# Keep all data classes used with Firebase
+# Keep all data classes used with Firebase.
+# Full keeps (including methods): Firestore's deserializer discovers property names
+# through getters, so the wildcard fields+constructor rule below is NOT enough -
+# R8 renaming a model's getters makes its documents silently deserialize empty in
+# release builds only.
 -keep class com.offerlens.data.Offer { *; }
+-keep class com.offerlens.data.OfferTier { *; }
 -keep class com.offerlens.data.User { *; }
 -keep class com.offerlens.data.PaymentMethod { *; }
 
