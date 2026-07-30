@@ -1495,10 +1495,15 @@
                     // Deliberately null rather than 0 when absent, so the app can tell
                     // "no cap" apart from "capped at zero".
                     maxDiscountAmount: parseFloat(item['Max Discount']) || null,
-                    minOrderValue: parseFloat(item['Min Order']) || 0,
+                    // null rather than 0 when absent, matching the manual form - the app
+                    // shows "None" for null and would show a bogus min of 0 otherwise.
+                    minOrderValue: parseFloat(item['Min Order']) || null,
                     description: item['Description'] || '',
                     termsAndConditions: item['Terms & C'] || '',
                     couponCode: item['Coupon Code'] || '',
+                    // "Code On Site" column: yes/true when a code is required but only
+                    // revealed on the bank's or merchant's own page after login.
+                    couponRevealedOnSite: /^(yes|true|y|1)$/i.test(String(item['Code On Site'] || '').trim()),
                     // Was previously written as "sourceUrl", which is not a field on the
                     // Offer model - every bulk-uploaded offer silently lost its source
                     // link. "Merchant URL" was never read at all, so bulk offers also had
