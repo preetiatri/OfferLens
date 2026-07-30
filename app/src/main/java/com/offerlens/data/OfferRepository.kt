@@ -186,6 +186,32 @@ class OfferRepository @Inject constructor(
      * Get cached offers from Room database
      */
     /**
+     * Drops offers whose end date has passed.
+     *
+     * Deliberately client-side and applied on every read: an offer expiring tonight must
+     * disappear tomorrow morning without waiting for an admin to deactivate it, and
+     * showing a dead offer is the fastest way to lose a user's trust in a deals app.
+     *
+     * A null endDate means "no published expiry" (common for ongoing bank tie-ups) and is
+     * always kept - never confuse "unknown" with "expired".
+     *
+     * The cutoff is the START of today, so an offer valid "until 30 Sep" is still shown
+     * throughout 30 Sep rather than vanishing at midnight when its timestamp is reached.
+     */
+    private fun List<Offer>.excludeExpired(): List<Offer> {
+        val startOfToday = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return filter { offer ->
+            val end = offer.endDate?.toDate()?.time
+            end == null || end >= startOfToday
+        }
+    }
+
+    /**
      * Get cached offers from Room database
      */
     private suspend fun getCachedOffers(): List<Offer> {
@@ -196,7 +222,12 @@ class OfferRepository @Inject constructor(
             if (entities.isNotEmpty()) {
                 Timber.d("Found ${entities.size} offers in cache")
             }
-            entities.map { it.toOffer() }
+            val all = entities.map { it.toOffer() }
+            val live = all.excludeExpired()
+            if (live.size < all.size) {
+                Timber.d("Hid ${all.size - live.size} expired offer(s)")
+            }
+            live
         } catch (e: Exception) {
             Timber.e(e, "Error fetching cached offers")
             emptyList()
@@ -208,7 +239,7 @@ class OfferRepository @Inject constructor(
      */
     fun getOffersFlow(): Flow<List<Offer>> {
         return offerDao.getAllActiveOffers().map { entities ->
-            entities.map { it.toOffer() }
+            entities.map { it.toOffer() }.excludeExpired()
         }
     }
     

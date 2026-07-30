@@ -289,6 +289,7 @@
 
         .badge-active { background: rgba(0, 255, 136, 0.1); color: var(--success); }
         .badge-inactive { background: rgba(255, 82, 82, 0.1); color: var(--error); }
+        .badge-expired { background: rgba(255, 193, 7, 0.15); color: #FFC107; }
 
         /* Bulk Upload Zone */
         .drop-zone {
@@ -368,6 +369,7 @@
                 <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
                     <input type="text" id="searchInput" placeholder="Search by merchant, bank, or category..." onkeyup="filterOffers()" style="margin-bottom:0;">
                     <button class="btn btn-outline" onclick="window.loadOffers()" style="white-space:nowrap;">Refresh</button>
+                    <button id="deactivateExpiredBtn" class="btn btn-outline" onclick="window.deactivateExpired()" style="white-space:nowrap;" title="Expired offers are already hidden in the app; this deactivates them in Firestore too">Deactivate expired</button>
                 </div>
                 <div id="offersList">
                     <p style="text-align: center; color: var(--text-dim);">Loading offers...</p>
@@ -1222,6 +1224,51 @@
             return div.innerHTML;
         }
 
+        // An offer counts as expired only once its end date is fully past - an offer
+        // valid "until 30 Sep" stays live throughout 30 Sep. A missing endDate means no
+        // published expiry (common for ongoing bank tie-ups), never treated as expired.
+        // Mirrors excludeExpired() in OfferRepository.kt.
+        function isExpired(offer) {
+            if (!offer.endDate) return false;
+            const end = typeof offer.endDate.toDate === 'function'
+                ? offer.endDate.toDate() : new Date(offer.endDate);
+            if (isNaN(end)) return false;
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            return end < startOfToday;
+        }
+
+        window.deactivateExpired = async function () {
+            const stale = allOffers.filter(o => o.isActive !== false && isExpired(o));
+            if (!stale.length) { showToast('No expired offers are still active.'); return; }
+            if (!confirm(`Deactivate ${stale.length} expired offer(s)? They are already hidden in the app; this tidies up Firestore.`)) return;
+
+            const btn = document.getElementById('deactivateExpiredBtn');
+            btn.disabled = true; btn.textContent = 'Deactivating…';
+            let done = 0;
+            try {
+                // Chunked like the bulk upload: Firestore caps a batch at 500 writes.
+                for (let i = 0; i < stale.length; i += 450) {
+                    const batch = writeBatch(db);
+                    stale.slice(i, i + 450).forEach(o => {
+                        batch.update(doc(db, 'offers', o.id), {
+                            isActive: false,
+                            updatedAt: serverTimestamp()
+                        });
+                    });
+                    await batch.commit();
+                    done += Math.min(450, stale.length - i);
+                }
+                showToast(`✅ Deactivated ${done} expired offer(s)`);
+                window.loadOffers();
+            } catch (err) {
+                showToast(`❌ Failed after ${done}: ${err.message}`, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Deactivate expired';
+            }
+        };
+
         // --- MANAGE LIST (paginated - Firestore reads happen on demand, not as a
         // standing real-time listener, and "Load More" reaches offers past the first page) ---
         const PAGE_SIZE = 50;
@@ -1262,11 +1309,12 @@
 
             list.innerHTML = offers.map(o => {
                 const active = o.isActive !== false;
+                const expired = isExpired(o);
                 const safeId = o.id.replace(/'/g, "\\'");
                 return `
-                    <div class="offer-item" id="offer-${o.id}" style="opacity: ${active ? 1 : 0.6}">
+                    <div class="offer-item" id="offer-${o.id}" style="opacity: ${active && !expired ? 1 : 0.6}">
                         <div class="offer-info">
-                            <h4>${escapeHtml(o.merchant)} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span></h4>
+                            <h4>${escapeHtml(o.merchant)} <span class="badge ${active ? 'badge-active' : 'badge-inactive'}">${active ? 'LIVE' : 'INACTIVE'}</span>${expired ? '<span class="badge badge-expired">EXPIRED</span>' : ''}</h4>
                             <p>${escapeHtml(o.bankName || '')} • ${escapeHtml(o.description || '')}</p>
                         </div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
