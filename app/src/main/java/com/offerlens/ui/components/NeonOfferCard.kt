@@ -90,7 +90,12 @@ fun NeonOfferCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            // Fixed height keeps the coupon button pinned to the card's bottom edge (the
+            // inner Column relies on a weighted Spacer, which needs a bounded height).
+            // Every element inside is single- or two-line capped, so content cannot
+            // outgrow this - the clipping seen earlier came from the discount headline
+            // wrapping, which is now prevented at source.
+            .height(190.dp)
             .background(
                 color = if (isDark) {
                     MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
@@ -215,11 +220,20 @@ fun NeonOfferCard(
                 verticalArrangement = Arrangement.Top
             ) {
                 Column {
+                    // Same problem as the details screen at a smaller scale: the card's
+                    // right column is narrow, so a five-digit amount wrapped and pushed
+                    // the coupon button past the card's bottom edge.
                     Text(
                         text = discountText,
-                        fontSize = 28.sp,
+                        fontSize = when {
+                            discountText.length <= 8 -> 28.sp
+                            discountText.length <= 11 -> 22.sp
+                            else -> 18.sp
+                        },
                         fontWeight = FontWeight.Bold,
-                        color = neonColor
+                        color = neonColor,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     // Show the cap on "X% off up to Rs Y" offers so the headline
                     // discount isn't misleading at a glance.

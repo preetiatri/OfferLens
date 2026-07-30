@@ -235,11 +235,22 @@ fun OfferDetailsScreen(
                             "₹$value OFF"
                         }
                         
+                        // 48sp fits "20% OFF" but not "Rs 15,000 OFF" - at five or more
+                        // digits the headline wrapped and the two lines overlapped each
+                        // other. Step the size down as the string grows, and keep it on
+                        // one line so it can never collide with itself.
                         Text(
                             text = discountText,
-                            fontSize = 48.sp,
+                            fontSize = when {
+                                discountText.length <= 8 -> 48.sp
+                                discountText.length <= 11 -> 38.sp
+                                discountText.length <= 14 -> 30.sp
+                                else -> 26.sp
+                            },
                             fontWeight = FontWeight.Bold,
-                            color = neonColor
+                            color = neonColor,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                         // Most bank offers are "X% off up to Rs Y" - without the cap the
                         // headline overstates what the user actually saves.

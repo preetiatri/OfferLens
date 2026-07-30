@@ -166,15 +166,23 @@ fun NeoGlassmorphicHomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Five 40dp buttons plus 8dp gaps need ~232dp, which leaves too
+                    // little for the title on a 360dp screen - the icons crowded it and
+                    // the row overflowed. The title now yields space instead of the row
+                    // overflowing, and the buttons sit tighter.
                     Text(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    
-                    
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         // User Profile / ID Button
                         IconButton(
                             onClick = { showUserDialog = true },
