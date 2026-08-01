@@ -106,7 +106,9 @@ class SmartWalletRepository @Inject constructor(
             "Canara Bank",
             "Union Bank of India",
             "IDBI Bank",
-            "Citibank",
+            // Citibank is deliberately absent: Citi sold its India consumer business to
+            // Axis Bank and the card migration completed in July 2024, so there is no
+            // Citibank-issued Indian card left for an offer to apply to.
             "HSBC",
             "Standard Chartered",
             "American Express",
@@ -127,7 +129,17 @@ class SmartWalletRepository @Inject constructor(
     init {
         scope.launch {
             val prefs = context.walletDataStore.data.first()
-            _myCards.value = prefs[MY_CARDS_KEY] ?: emptySet()
+            val stored = prefs[MY_CARDS_KEY] ?: emptySet()
+            // Drop any saved issuer that has since left the supported list. Such a name no
+            // longer appears in My Cards, so the user cannot deselect it - and if it were
+            // their only saved card, Smart Wallet would filter every offer away with no way
+            // back short of "Clear all". Citibank is the first of these; slice and Freecharge
+            // have both restructured, so it will not be the last.
+            val pruned = stored.filterTo(mutableSetOf()) { it in supportedBanks }
+            _myCards.value = pruned
+            if (pruned.size != stored.size) {
+                context.walletDataStore.edit { it[MY_CARDS_KEY] = pruned }
+            }
             _isFilterEnabled.value = prefs[FILTER_ENABLED_KEY] ?: false
         }
     }
