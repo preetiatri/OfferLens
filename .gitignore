@@ -185,3 +185,7 @@ lint-report.xml
 .svn/
 .hg/
 .bzr/
+
+# Claude Code local permission settings (machine-specific)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
