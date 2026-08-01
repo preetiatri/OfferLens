@@ -416,7 +416,9 @@ fun NeoGlassmorphicHomeScreen(
                         item(key = "empty") {
                             EmptyStateMessage(
                                 category = currentCategory,
-                                isSearchActive = searchQuery.isNotBlank()
+                                isSearchActive = searchQuery.isNotBlank(),
+                                isSmartWalletActive = isSmartWalletEnabled,
+                                onDisableFilter = { viewModel.toggleSmartWallet() }
                             )
                         }
                     }

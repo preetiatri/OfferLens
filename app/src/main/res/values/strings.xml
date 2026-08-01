@@ -11,6 +11,9 @@
     <string name="no_offers_yet">No offers yet</string>
     <string name="search_suggestion">Try searching for something else in \'%1$s\'</string>
     <string name="check_back_later">Check back later for %1$s offers</string>
+    <string name="no_wallet_matches">No offers for your cards</string>
+    <string name="wallet_filter_hint">Smart Wallet is showing only %1$s offers that match your saved cards.</string>
+    <string name="show_all_offers">Show all offers</string>
     <string name="expires_prefix">Expires %1$s</string>
     <string name="new_badge">NEW</string>
     <string name="copied_toast">✓ Copied: %1$s</string>
