@@ -74,11 +74,22 @@ interface OfferDao {
     suspend fun deleteOldOffers(timestamp: Long)
 
     /**
-     * Delete offers that are NOT in the provided list of IDs (for syncing)
-     * Keeps offers that are still valid/returned by API
+     * Every cached offer id, used to work out which rows the server no longer returns.
+     *
+     * The diff is computed in Kotlin rather than with a "NOT IN (:ids)" query on purpose:
+     * an empty id list makes that SQL a no-op (so a genuinely emptied catalogue would never
+     * be cleared), and SQLite caps a statement at 999 bound variables, which a growing
+     * catalogue would eventually exceed.
      */
-    @Query("DELETE FROM offers WHERE id NOT IN (:ids)")
-    suspend fun deleteOffersNotIn(ids: List<String>)
+    @Query("SELECT id FROM offers")
+    suspend fun getAllCachedIds(): List<String>
+
+    /**
+     * Delete specific offers by id. Callers chunk the list to stay under SQLite's
+     * bound-variable limit.
+     */
+    @Query("DELETE FROM offers WHERE id IN (:ids)")
+    suspend fun deleteOffersByIds(ids: List<String>)
 
     /**
      * Delete offers by category (useful for partial refresh)

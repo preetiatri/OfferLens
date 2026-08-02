@@ -89,40 +89,42 @@ class OfferRepository @Inject constructor(
             // atomic since this repository is a singleton shared by multiple ViewModels
             // (e.g. Home + OfferList) that can call getOffers()/loadMoreOffers() concurrently.
             val firebaseOffers = paginationMutex.withLock {
-                if (isLoadMore && isLastPageReached) {
-                    Timber.d("End of list reached, no more offers to fetch")
-                    return getCachedOffers()
+                if (isLoadMore) {
+                    if (isLastPageReached) {
+                        Timber.d("End of list reached, no more offers to fetch")
+                        return getCachedOffers()
+                    }
+                    fetchFromFirebase(isLoadMore = true)
+                } else {
+                    // A fresh load pulls the whole active catalogue rather than one page.
+                    //
+                    // Paging the sync made deletions invisible: a deactivated offer simply
+                    // stops appearing in the response, and an insert-only cache update has
+                    // no way to tell "removed from the server" apart from "on a later page".
+                    // Deactivated offers therefore stayed visible in the app.
+                    //
+                    // Fetching everything makes the response authoritative, so the reconcile
+                    // below can safely delete whatever is missing. It also refreshes cachedAt
+                    // on every row, which stops clearOldCache() from evicting live offers that
+                    // happened to sit beyond the first page.
+                    val all = fetchAllActiveFromFirebase()
+                    lastVisibleDocument = null
+                    isLastPageReached = true
+                    all
                 }
-                fetchFromFirebase(isLoadMore)
             }
-            
-            // Re-enabled: Clear cache on fresh load (Page 1) to ensure we remove Deactivated offers.
-            // If we don't do this, offers deactivated in the Admin Panel will remain "Active" in the local cache.
-            if (firebaseOffers.isNotEmpty()) {
-                // Re-enabled: Clear cache on fresh load (Page 1) to ensure we remove Deactivated offers.
-                // If we don't do this, offers deactivated in the Admin Panel will remain "Active" in the local cache.
-                if (!isLoadMore) {
-                    Timber.d("Fresh load - Updating cache safely")
-                    // CRITICAL FIX: Do NOT delete all offers. 
-                    // Instead, we should ideally only delete offers that are no longer valid.
-                    // However, since we don't have a "sync tokens" mechanism yet, a full wipe was the naive approach.
-                    // Improved approach: 
-                    // 1. If we are fetching "All" (no specific query/category), we *could* treat the new list as the "Truth" for the top items.
-                    // But we can't know if items deeper in the list are deleted.
-                    
-                    // Best compromise for now without full Sync Engine:
-                    // Just Insert/Update. Old invalid offers might linger until `deleteOldOffers` cleans them up.
-                    // This prevents wiping "Favorites" or "Other Categories" if we were fetching a specific category.
-                    
-                    // We will NOT call deleteAllOffers().
-                    // We rely on `insertOffers` (REPLACE strategy) to update existing ones.
-                    // We rely on `clearOldCache()` (called periodically) to remove stale ones.
-                }
 
+            if (!isLoadMore) {
+                // The full fetch is the source of truth: anything cached but absent from it
+                // has been deactivated or deleted in the admin panel and must go.
+                reconcileCache(firebaseOffers)
+            }
+
+            if (firebaseOffers.isNotEmpty()) {
                 Timber.d("Caching ${firebaseOffers.size} offers")
                 offerDao.insertOffers(firebaseOffers.map { it.toEntity() })
             }
-            
+
             // Update TTL timestamp on a fresh fetch attempt
             if (!isLoadMore) {
                 val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -137,6 +139,53 @@ class OfferRepository @Inject constructor(
         }
     }
     
+    /**
+     * Fetches every active offer in one query, for use as the authoritative set on a
+     * fresh sync. The catalogue is in the low hundreds, so this is a single small read
+     * rather than something that needs paging.
+     */
+    private suspend fun fetchAllActiveFromFirebase(): List<Offer> {
+        val snapshot = firestore.collection("offers")
+            .whereEqualTo("isActive", true)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .get()
+            .await()
+
+        Timber.d("Full sync fetched ${snapshot.documents.size} active offers")
+
+        return snapshot.documents.mapNotNull { document ->
+            try {
+                document.toObject(Offer::class.java)?.copy(id = document.id)
+            } catch (e: Exception) {
+                Timber.e("Error parsing offer ${document.id}: ${e.message}")
+                null
+            }
+        }
+    }
+
+    /**
+     * Removes cached offers the server no longer returns - the ones deactivated or deleted
+     * in the admin panel. Without this they linger in Room with their stale isActive=1 and
+     * keep showing in the app, since an insert-only sync never deletes anything.
+     *
+     * Note this runs even when the server returns nothing: an emptied catalogue must empty
+     * the cache too. A failed query throws rather than returning empty, so this cannot be
+     * triggered by a network error.
+     */
+    private suspend fun reconcileCache(serverOffers: List<Offer>) {
+        try {
+            val serverIds = serverOffers.map { it.id }.toSet()
+            val staleIds = offerDao.getAllCachedIds().filterNot { it in serverIds }
+            if (staleIds.isEmpty()) return
+
+            // Chunked to stay under SQLite's 999 bound-variable limit.
+            staleIds.chunked(500).forEach { offerDao.deleteOffersByIds(it) }
+            Timber.d("Reconcile removed ${staleIds.size} offer(s) no longer on the server")
+        } catch (e: Exception) {
+            Timber.e(e, "Cache reconcile failed")
+        }
+    }
+
     /**
      * Fetch offers from Firebase Firestore with Pagination
      */
