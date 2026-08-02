@@ -14,7 +14,11 @@ firebaseBom = "34.6.0"
 navigationCompose = "2.7.7"
 room = "2.6.1"
 ksp = "2.0.0-1.0.21"
-billing = "6.2.1"
+# 8.x line: Play requires new apps to use a recent major. 8.0.0 rather than 8.3.0
+# because 8.1+ is compiled with Kotlin 2.2 metadata, unreadable by this project's
+# Kotlin 2.0 - going higher forces a Kotlin/KSP/Hilt/Room cascade. Revisit with the
+# next Kotlin bump.
+billing = "8.0.0"
 playServicesAds = "23.0.0"
 datastorePreferences = "1.0.0"
 sqlcipher = "4.5.4"

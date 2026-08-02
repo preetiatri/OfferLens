@@ -73,7 +73,13 @@ class PremiumRepository @Inject constructor(
 
     private val billingClient = BillingClient.newBuilder(context)
         .setListener(this)
-        .enablePendingPurchases()
+        // Billing 8 removed the no-arg overload; pending one-time purchases must be
+        // opted into explicitly (premium is a one-time INAPP product).
+        .enablePendingPurchases(
+            com.android.billingclient.api.PendingPurchasesParams.newBuilder()
+                .enableOneTimeProducts()
+                .build()
+        )
         .build()
 
     // SKU Parameter (In-App Product ID from Play Console)
