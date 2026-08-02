@@ -26,6 +26,7 @@ HSBC = "https://www.hsbc.co.in/credit-cards/offers/"
 SC = "https://www.sc.bank.in/credit-cards/digismart-card/"
 AMEX = "https://www.americanexpress.com/en-in/benefits/emi/emi-offers/in-store/index.html"
 ONECARD = "https://www.getonecard.app/sbmoffers/"
+AXIS = "https://www.axis.bank.in/offers"
 
 # Merchant, Bank, Category, PaymentType, DiscountType, Value, MaxDisc, MinOrder,
 # Description, Terms, Code, CodeOnSite, MerchantURL, Source, ValidUntil
@@ -159,6 +160,25 @@ OFFERS = [
      "Flat Rs 500 off at Zouk with OneCard.",
      "Minimum order Rs 2,199.",
      "ZBADN5", "FALSE", "https://www.zouk.co.in", ONECARD, "2027-03-31"),
+
+    # --- Axis Bank --------------------------------------------------------
+    ("Bata", "Axis Bank", "Fashion", "Credit Card", "Flat", 500, "", 2999,
+     "Rs 500 off at Bata with Axis Bank Credit and Debit Cards.",
+     "Minimum shopping of Rs 2,999. Valid on Credit and Debit Cards.",
+     "", "TRUE", "https://www.bata.in", AXIS, "2026-10-15"),
+    ("AJIO", "Axis Bank", "Fashion", "Credit Card", "Flat", 150, "", 1299,
+     "Flat Rs 150 off on AJIO with Axis Bank Credit and Debit Cards.",
+     "Minimum order value Rs 1,299. Valid on Credit and Debit Cards.",
+     "ADNAJIO", "FALSE", "https://www.ajio.com", AXIS, "2026-10-15"),
+    ("Urban Ladder", "Axis Bank", "Shopping", "Credit Card", "Percentage", 10, "", 5000,
+     "Additional 10% off on Urban Ladder with Axis Bank Credit and Debit Cards.",
+     "Minimum order Rs 5,000. Stated as an additional discount, so it applies on top "
+     "of any existing offer. No cap published by the issuer.",
+     "ULADN10", "FALSE", "https://www.urbanladder.com", AXIS, "2026-10-15"),
+    ("Yes Madam", "Axis Bank", "Health & Beauty", "Credit Card", "Flat", 500, "", "",
+     "Rs 500 off on Yes Madam with Axis Bank Credit and Debit Cards.",
+     "Minimum order not published by the issuer.",
+     "YMADN500", "FALSE", "https://www.yesmadam.com", AXIS, "2026-10-15"),
 ]
 
 HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
@@ -197,7 +217,7 @@ def main():
     notes = [
         ["OfferLens - Batch 2 bulk upload"],
         [""],
-        ["Built 30 July 2026. %d offers across 9 issuers." % len(OFFERS)],
+        ["Built 30 July 2026. %d offers across 10 issuers." % len(OFFERS)],
         [""],
         ["VERIFY BEFORE PUBLISHING"],
         ["Open the 'Offer Source' URL on each row and confirm the numbers still match."],
@@ -227,6 +247,8 @@ def main():
         ["Mobikwik - expired offer pages remain publicly live; no dates published."],
         ["OneCard Bewakoof and Giva - the issuer's own feed contradicts itself on value."],
         ["Citibank - has exited Indian consumer banking; no such card exists."],
+        ["Axis KFC (free fries) - a freebie, not a discount value; does not fit the schema."],
+        ["Axis SNITCH and the Apple banner - headline only, no value published."],
     ]
     for line in notes:
         readme.append(line)
