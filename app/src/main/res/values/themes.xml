@@ -3,5 +3,12 @@
     <style name="Theme.OfferLens" parent="android:Theme.Material.Light.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+
+        <!-- targetSdk 35 makes Android 15+ enforce edge-to-edge, drawing content under
+             the system bars - but only OfferListScreen is inset-aware today, so the home
+             title would sit beneath the status bar. This is Google's sanctioned bridge
+             until the proper edge-to-edge pass (UI plan Phase 4); the attribute is
+             ignored below API 35 and removed entirely when targeting 36. -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
     </style>
 </resources>

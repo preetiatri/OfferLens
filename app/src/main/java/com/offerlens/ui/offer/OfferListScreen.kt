@@ -247,7 +247,8 @@ fun OfferListScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             userScrollEnabled = true,
-            beyondBoundsPageCount = 1
+            // Renamed from beyondBoundsPageCount in Compose 1.7
+            beyondViewportPageCount = 1
         ) { page ->
             // Offer List for current category
             LazyColumn(

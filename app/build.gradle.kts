@@ -27,12 +27,15 @@ val ciVersionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.offerlens"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.offerlens.app"
         minSdk = 24
-        targetSdk = 34
+        // Google Play requires new apps to target API 35+; a targetSdk 34 upload is
+        // rejected outright. 35 rather than 36 because targeting 36 removes the
+        // edge-to-edge opt-out below before the app's screens are inset-aware.
+        targetSdk = 35
         versionCode = ciVersionCode
         versionName = "1.0"
 
