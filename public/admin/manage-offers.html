@@ -586,7 +586,7 @@
         } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import {
             getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDoc, setDoc,
-            query, orderBy, limit, startAfter, getDocs, writeBatch, serverTimestamp, Timestamp
+            query, where, orderBy, limit, startAfter, getDocs, writeBatch, serverTimestamp, Timestamp
         } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -1262,6 +1262,7 @@
                 }
                 showToast(`✅ Deactivated ${done} expired offer(s)`);
                 window.loadOffers();
+                schedulePublishCatalogue();
             } catch (err) {
                 showToast(`❌ Failed after ${done}: ${err.message}`, true);
             } finally {
@@ -1358,6 +1359,99 @@
             toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
         }
 
+        // --- CATALOGUE PUBLISHING ---
+        // Packs the active catalogue into catalogue/chunk_N docs plus a catalogue/meta
+        // manifest (active ids + per-chunk content hashes). The app syncs from these:
+        // one meta read answers "did anything change?", deletions reconcile from the id
+        // list alone, and only chunks whose hash changed get downloaded. Without this,
+        // every user's every sync reads the entire offers collection document by
+        // document, which exceeds Firestore's free 50k daily reads at under a hundred
+        // daily users.
+        const CATALOGUE_CHUNK_SIZE = 100; // ~4KB/offer worst case keeps a chunk well under the 1MB doc limit
+
+        async function publishCatalogue() {
+            const snap = await getDocs(query(collection(db, 'offers'), where('isActive', '==', true)));
+            const toMs = t => (t && typeof t.toMillis === 'function') ? t.toMillis() : null;
+
+            const offers = snap.docs.map(d => {
+                const o = d.data();
+                return {
+                    id: d.id,
+                    bankName: o.bankName || '',
+                    paymentType: o.paymentType || '',
+                    merchant: o.merchant || '',
+                    discountType: o.discountType || '',
+                    discountValue: o.discountValue ?? 0,
+                    maxDiscountAmount: o.maxDiscountAmount ?? null,
+                    minOrderValue: o.minOrderValue ?? null,
+                    tiers: o.tiers || [],
+                    description: o.description || '',
+                    termsAndConditions: o.termsAndConditions || '',
+                    couponCode: o.couponCode || '',
+                    couponRevealedOnSite: o.couponRevealedOnSite === true,
+                    merchantUrl: o.merchantUrl || '',
+                    offerSourceUrl: o.offerSourceUrl || '',
+                    category: o.category || '',
+                    // Timestamps travel as epoch millis: Timestamp objects can't be
+                    // hashed with JSON.stringify and don't round-trip inside arrays.
+                    startDateMs: toMs(o.startDate),
+                    endDateMs: toMs(o.endDate),
+                    createdAtMs: toMs(o.createdAt),
+                    updatedAtMs: toMs(o.updatedAt)
+                };
+            // Deterministic order (newest first, id tiebreak) so identical content
+            // always produces identical chunk hashes.
+            }).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0) || a.id.localeCompare(b.id));
+
+            const chunks = [];
+            for (let i = 0; i < offers.length; i += CATALOGUE_CHUNK_SIZE) {
+                chunks.push(offers.slice(i, i + CATALOGUE_CHUNK_SIZE));
+            }
+
+            // djb2 - only needs to detect "content changed", not resist an adversary.
+            const hashStr = s => {
+                let h = 5381;
+                for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+                return (h >>> 0).toString(36);
+            };
+            const chunkHashes = chunks.map(c => hashStr(JSON.stringify(c)));
+
+            // Chunk count can shrink (offers deactivated) - delete the leftovers so a
+            // stale chunk_3 doesn't linger after the catalogue fits in 3 chunks.
+            const prevMeta = await getDoc(doc(db, 'catalogue', 'meta'));
+            const prevCount = prevMeta.exists() ? (prevMeta.data().chunkCount || 0) : 0;
+
+            const batch = writeBatch(db);
+            chunks.forEach((c, i) => {
+                batch.set(doc(db, 'catalogue', 'chunk_' + i), { offers: c, hash: chunkHashes[i] });
+            });
+            for (let i = chunks.length; i < prevCount; i++) {
+                batch.delete(doc(db, 'catalogue', 'chunk_' + i));
+            }
+            batch.set(doc(db, 'catalogue', 'meta'), {
+                version: Date.now(),
+                chunkCount: chunks.length,
+                chunkHashes: chunkHashes,
+                ids: offers.map(o => o.id),
+                count: offers.length,
+                updatedAt: serverTimestamp()
+            });
+            await batch.commit();
+            return offers.length;
+        }
+
+        // Debounced so a burst of edits (bulk upload, several toggles in a row) publishes
+        // once at the end rather than re-reading the collection per click.
+        let cataloguePublishTimer = null;
+        function schedulePublishCatalogue() {
+            clearTimeout(cataloguePublishTimer);
+            cataloguePublishTimer = setTimeout(() => {
+                publishCatalogue()
+                    .then(n => showToast(`📦 App catalogue published (${n} offers)`))
+                    .catch(e => showToast('❌ Catalogue publish failed: ' + e.message + ' — the app will not see recent changes until a publish succeeds', true));
+            }, 4000);
+        }
+
         window.toggleOffer = async function(id, status, btn) {
             const original = btn.textContent;
             btn.disabled = true;
@@ -1368,6 +1462,7 @@
                     updatedAt: serverTimestamp()
                 });
                 showToast(status ? '✅ Offer activated!' : '✅ Offer deactivated!');
+                schedulePublishCatalogue();
             } catch (err) {
                 console.error('Toggle error:', err);
                 showToast('❌ Error: ' + err.message, true);
@@ -1384,6 +1479,7 @@
                 await deleteDoc(doc(db, 'offers', id));
                 if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
                 showToast('🗑️ Offer permanently deleted!');
+                schedulePublishCatalogue();
             } catch (err) {
                 console.error('Delete error:', err);
                 showToast('❌ Delete failed: ' + err.message, true);
@@ -1461,6 +1557,7 @@
                 document.getElementById('m_bankName_other').style.display = 'none';
                 clearTiers(); // reset() doesn't touch dynamically added rows
                 window.loadOffers(); // refresh the list tab so the change shows up
+                schedulePublishCatalogue();
             } catch (err) {
                 status.innerHTML = '<span style="color:var(--error)">❌ Error: ' + err.message + '</span>';
             } finally {
@@ -1650,6 +1747,7 @@
                 status.innerHTML = `<span style="color:var(--success)">✅ Successfully synced ${syncedCount} offers!</span>`;
                 document.getElementById('bulkPreview').style.display = 'none';
                 window.loadOffers(); // refresh the list tab so the new offers show up
+                schedulePublishCatalogue();
             } catch (err) {
                 status.innerHTML = `<span style="color:var(--error)">❌ Migration failed after ${syncedCount} of ${parsedBulkData.length} offers synced: ${err.message}</span>`;
             } finally {

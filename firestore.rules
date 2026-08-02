@@ -56,6 +56,20 @@ service cloud.firestore {
     }
     
     // ========================================
+    // CATALOGUE COLLECTION
+    // ========================================
+    // The published offer catalogue the app syncs from: catalogue/meta is a manifest
+    // (active ids + per-chunk content hashes), catalogue/chunk_N holds the offers.
+    // Written only by the admin panel after any offer mutation. Public read like
+    // categories/config - it contains exactly the data already publicly readable
+    // from the offers collection, packed to cost ~1 read per sync instead of one
+    // read per offer per user.
+    match /catalogue/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ========================================
     // USERS COLLECTION
     // ========================================
     match /users/{userId} {

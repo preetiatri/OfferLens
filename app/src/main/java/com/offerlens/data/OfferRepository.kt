@@ -26,6 +26,10 @@ class OfferRepository @Inject constructor(
 ) {
     private val PREFS_NAME = "offer_repo_prefs"
     private val KEY_LAST_FETCH = "last_fetch_timestamp"
+    // Per-chunk content hashes from the last successful catalogue sync, joined with ",".
+    // Comparing against the server's hashes lets a sync skip chunks that haven't changed,
+    // so a typical day's sync is one tiny meta read and zero chunk downloads.
+    private val KEY_CHUNK_HASHES = "catalogue_chunk_hashes"
     private val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
 
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -96,28 +100,24 @@ class OfferRepository @Inject constructor(
                     }
                     fetchFromFirebase(isLoadMore = true)
                 } else {
-                    // A fresh load pulls the whole active catalogue rather than one page.
-                    //
-                    // Paging the sync made deletions invisible: a deactivated offer simply
-                    // stops appearing in the response, and an insert-only cache update has
-                    // no way to tell "removed from the server" apart from "on a later page".
-                    // Deactivated offers therefore stayed visible in the app.
-                    //
-                    // Fetching everything makes the response authoritative, so the reconcile
-                    // below can safely delete whatever is missing. It also refreshes cachedAt
-                    // on every row, which stops clearOldCache() from evicting live offers that
-                    // happened to sit beyond the first page.
-                    val all = fetchAllActiveFromFirebase()
+                    // Fresh load. Prefer the published catalogue (catalogue/meta + chunk
+                    // docs): one manifest read answers "did anything change?", and only
+                    // changed chunks are downloaded. Per-document reads of the offers
+                    // collection cost catalogue-size reads per user per sync, which blows
+                    // through the Firestore free tier at under a hundred daily users.
                     lastVisibleDocument = null
                     isLastPageReached = true
-                    all
+                    if (syncViaCatalogue()) {
+                        emptyList() // cache already reconciled and updated
+                    } else {
+                        // Catalogue not published yet - legacy full-collection fetch. The
+                        // response is the whole active set, so it is safe to treat as
+                        // authoritative and delete whatever is missing from it.
+                        val all = fetchAllActiveFromFirebase()
+                        reconcileCache(all)
+                        all
+                    }
                 }
-            }
-
-            if (!isLoadMore) {
-                // The full fetch is the source of truth: anything cached but absent from it
-                // has been deactivated or deleted in the admin panel and must go.
-                reconcileCache(firebaseOffers)
             }
 
             if (firebaseOffers.isNotEmpty()) {
@@ -139,6 +139,113 @@ class OfferRepository @Inject constructor(
         }
     }
     
+    /**
+     * Syncs from the published catalogue written by the admin panel:
+     *
+     *   catalogue/meta     - { chunkCount, chunkHashes: [..], ids: [..], version }
+     *   catalogue/chunk_N  - { offers: [plain maps], hash }
+     *
+     * Cost model, which is the whole point: the meta read is 1 document regardless of
+     * catalogue size, meta.ids lets deletions reconcile without downloading anything,
+     * and a chunk is only fetched when its content hash differs from the one stored at
+     * the last sync. A day with no admin edits costs each user 1 read per sync instead
+     * of catalogue-size reads.
+     *
+     * Returns false when the catalogue has never been published (meta missing), in which
+     * case the caller falls back to reading the offers collection directly.
+     */
+    private suspend fun syncViaCatalogue(): Boolean {
+        val meta = firestore.collection("catalogue").document("meta").get().await()
+        if (!meta.exists()) return false
+
+        val ids = (meta.get("ids") as? List<*>)?.filterIsInstance<String>() ?: return false
+        val serverHashes = (meta.get("chunkHashes") as? List<*>)?.map { it.toString() } ?: emptyList()
+
+        // Deletions first, straight from the manifest - a deactivated offer disappears
+        // from meta.ids even when no chunk needs downloading.
+        val idSet = ids.toSet()
+        val staleIds = offerDao.getAllCachedIds().filterNot { it in idSet }
+        if (staleIds.isNotEmpty()) {
+            staleIds.chunked(500).forEach { offerDao.deleteOffersByIds(it) }
+            Timber.d("Catalogue sync removed ${staleIds.size} offer(s) no longer published")
+        }
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val storedHashes = prefs.getString(KEY_CHUNK_HASHES, "")!!
+            .split(",").filter { it.isNotEmpty() }
+
+        var fetched = 0
+        serverHashes.forEachIndexed { i, hash ->
+            if (storedHashes.getOrNull(i) != hash) {
+                val chunk = firestore.collection("catalogue").document("chunk_$i").get().await()
+                val offers = (chunk.get("offers") as? List<*>)
+                    ?.filterIsInstance<Map<String, Any?>>()
+                    ?.mapNotNull { mapToOffer(it) }
+                    ?: emptyList()
+                if (offers.isNotEmpty()) {
+                    offerDao.insertOffers(offers.map { it.toEntity() })
+                    fetched += offers.size
+                }
+            }
+        }
+        // Persisted only after every changed chunk landed, so a failed sync retries the
+        // same chunks next time instead of recording progress it didn't make. (An
+        // exception above propagates to getOffers' catch, which serves cache.)
+        prefs.edit().putString(KEY_CHUNK_HASHES, serverHashes.joinToString(",")).apply()
+        Timber.d("Catalogue sync done (${serverHashes.size} chunk(s), $fetched offer(s) refreshed)")
+        return true
+    }
+
+    private fun msToTimestamp(v: Any?): com.google.firebase.Timestamp? {
+        val ms = (v as? Number)?.toLong() ?: return null
+        return com.google.firebase.Timestamp(ms / 1000, ((ms % 1000) * 1_000_000).toInt())
+    }
+
+    /**
+     * Rebuilds an Offer from the plain map stored in a catalogue chunk. Timestamps travel
+     * as epoch milliseconds (Firestore Timestamp objects don't survive inside arrays the
+     * admin panel serializes with JSON.stringify for hashing).
+     */
+    private fun mapToOffer(m: Map<String, Any?>): Offer? {
+        val id = m["id"] as? String ?: return null
+        return try {
+            Offer(
+                id = id,
+                bankName = m["bankName"] as? String ?: "",
+                paymentType = m["paymentType"] as? String ?: "",
+                merchant = m["merchant"] as? String ?: "",
+                discountType = m["discountType"] as? String ?: "",
+                discountValue = (m["discountValue"] as? Number)?.toDouble() ?: 0.0,
+                maxDiscountAmount = (m["maxDiscountAmount"] as? Number)?.toDouble(),
+                minOrderValue = (m["minOrderValue"] as? Number)?.toDouble(),
+                tiers = (m["tiers"] as? List<*>)?.filterIsInstance<Map<String, Any?>>()?.map { t ->
+                    OfferTier(
+                        label = t["label"] as? String ?: "",
+                        discountValue = (t["discountValue"] as? Number)?.toDouble() ?: 0.0,
+                        maxDiscountAmount = (t["maxDiscountAmount"] as? Number)?.toDouble(),
+                        minOrderValue = (t["minOrderValue"] as? Number)?.toDouble(),
+                        note = t["note"] as? String ?: ""
+                    )
+                } ?: emptyList(),
+                startDate = msToTimestamp(m["startDateMs"]),
+                endDate = msToTimestamp(m["endDateMs"]),
+                isActive = true, // only active offers are published
+                description = m["description"] as? String ?: "",
+                merchantUrl = m["merchantUrl"] as? String ?: "",
+                offerSourceUrl = m["offerSourceUrl"] as? String ?: "",
+                category = m["category"] as? String ?: "",
+                couponCode = m["couponCode"] as? String ?: "",
+                couponRevealedOnSite = m["couponRevealedOnSite"] as? Boolean ?: false,
+                termsAndConditions = m["termsAndConditions"] as? String ?: "",
+                createdAt = msToTimestamp(m["createdAtMs"]),
+                updatedAt = msToTimestamp(m["updatedAtMs"])
+            )
+        } catch (e: Exception) {
+            Timber.e("Error parsing catalogue offer $id: ${e.message}")
+            null
+        }
+    }
+
     /**
      * Fetches every active offer in one query, for use as the authoritative set on a
      * fresh sync. The catalogue is in the low hundreds, so this is a single small read
@@ -293,34 +400,27 @@ class OfferRepository @Inject constructor(
     }
     
     suspend fun getOfferById(offerId: String): Offer? {
+        // Cache first: the catalogue sync keeps every active offer in Room, so the detail
+        // screen almost always opens something we already have. Reading Firestore first
+        // cost one billed read per detail view - at a few thousand daily users that alone
+        // was tens of thousands of reads a day for data already sitting on the device.
+        val cached = offerDao.getOfferById(offerId)
+        if (cached != null) return cached.toOffer()
+
+        // Cache miss (deep link to an offer not yet synced, or cleared storage) - fall
+        // back to a direct read.
         return try {
-            Timber.d("Fetching offer with ID: $offerId")
-            
-            // Try Firebase first
+            Timber.d("Cache miss for offer $offerId, fetching from Firestore")
             val snapshot = firestore.collection("offers")
                 .document(offerId)
                 .get()
                 .await()
-            
-            Timber.d("Document exists: ${snapshot.exists()}")
-            
             val offer = snapshot.toObject(Offer::class.java)?.copy(id = snapshot.id)
-            if (offer != null) {
-                Timber.d("Fetched offer from Firebase: ${offer.merchant} (ID: ${offer.id})")
-                // Cache it
-                offerDao.insertOffer(offer.toEntity())
-            } else {
-                Timber.w("Offer not found in Firebase, checking cache...")
-                // Fallback to cache
-                val cachedEntity = offerDao.getOfferById(offerId)
-                return cachedEntity?.toOffer()
-            }
+            if (offer != null) offerDao.insertOffer(offer.toEntity())
             offer
         } catch (e: Exception) {
-            Timber.e(e, "Error fetching offer by ID: $offerId, checking cache")
-            // Fallback to cache
-            val cachedEntity = offerDao.getOfferById(offerId)
-            cachedEntity?.toOffer()
+            Timber.e(e, "Error fetching offer by ID: $offerId")
+            null
         }
     }
 
