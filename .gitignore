@@ -189,3 +189,6 @@ lint-report.xml
 # Claude Code local permission settings (machine-specific)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Generated static site (rebuild with deployment_assets/build_web_catalogue.py)
+deployment_assets/web_out/
